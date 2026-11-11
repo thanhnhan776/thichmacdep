@@ -1,0 +1,30 @@
+{
+  "name": "thichmacdep",
+  "private": true,
+  "scripts": {
+    "dev:api": "wrangler dev --local",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "typecheck:api": "tsc --noEmit",
+    "test:api": "node --test tests/api.test.mjs",
+    "dev:storefront": "pnpm --filter storefront start",
+    "build:storefront": "pnpm --filter storefront build",
+    "test:storefront": "pnpm --filter storefront test --watch=false",
+    "test:storefront:ssr": "pnpm build:storefront && node --test tests/storefront-ssr.test.mjs",
+    "dev:storefront:worker": "wrangler dev --config apps/storefront/wrangler.jsonc --local --ip 127.0.0.1"
+  },
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || ^26.0.0"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.4",
+    "hono": "4.13.18"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261110.1",
+    "drizzle-kit": "0.31.11",
+    "typescript": "6.0.3",
+    "wrangler": "4.160.0"
+  }
+}

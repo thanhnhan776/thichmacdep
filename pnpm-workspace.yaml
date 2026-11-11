@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: true
+  lmdb: true
+  msgpackr-extract: true
+  workerd: true
+minimumReleaseAgeExclude:
+  - hono@4.13.18
+  - miniflare@5.20261110.0-beta
+  - wrangler@4.160.0
