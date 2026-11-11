@@ -938,6 +938,8 @@ fallback polling schedule.
 
 ### Phase 0 --- Repository and architecture proof
 
+**Progress:** Complete (owner-approved deferral: fresh-clone setup verification has not been performed). Local migration, D1/R2 smoke tests, health endpoint, Angular server-rendered sample route, and local Workers SSR/asset proof passed. Production deployment compatibility remains unverified. See `docs/phase-0-compatibility.md` and commit `ceeb3be`.
+
 **Tasks** - Create monorepo and package scripts. - Scaffold Angular SSR
 application. - Scaffold Hono Worker. - Configure local Wrangler D1 and
 R2 bindings. - Configure Drizzle and first migration. - Prove Angular
@@ -953,6 +955,8 @@ SSR on Workers, or a documented blocker/alternative is raised before
 further storefront implementation.
 
 ### Phase 1 --- Normalized catalog and API
+
+**Progress:** Complete locally. The normalized schema and migration, repeatable fixtures, and read-only catalog API pass local integration tests for pagination, filtering, visibility, provider-ID separation, and preservation of website settings. SQLite LIKE does not provide full Unicode case-insensitive search; provider image URLs are withheld until application-controlled delivery is implemented in Phase 3. No KiotViet integration or production resources have been created.
 
 **Tasks** - Implement D1 schema and migrations. - Implement repositories
 and catalog services. - Implement public product/category endpoints. -
