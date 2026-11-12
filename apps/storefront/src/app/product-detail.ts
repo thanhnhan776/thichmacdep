@@ -132,7 +132,8 @@ export class ProductDetail {
     const product = this.product();
     if (!product) return;
     const variant = this.variant();
-    const text = `Hello, I'm interested in ${product.name}${variant ? ` — ${variantLabel(variant)}${variant.sku ? ` (${variant.sku})` : ''}` : ''}. ${typeof location === 'undefined' ? '' : location.href}`.trim();
+    const introduction = this.language.current() === 'vi' ? 'Xin chào, tôi quan tâm đến sản phẩm' : "Hello, I'm interested in";
+    const text = `${introduction} ${product.name}${variant ? ` — ${variantLabel(variant)}${variant.sku ? ` (${variant.sku})` : ''}` : ''}. ${typeof location === 'undefined' ? '' : location.href}`.trim();
     try {
       await navigator.clipboard.writeText(text);
       if (this.identity() === product.id) this.copyStatus.set(this.language.text().copied);

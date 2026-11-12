@@ -42,7 +42,12 @@
             <p>{{ language.text().askStore }}</p>
             <div class="contact-actions">
               @for (contact of contacts(); track contact.label) { <a [href]="contact.url" target="_blank" rel="noopener noreferrer">{{ contact.label }}</a> }
-              <button type="button" (click)="copyInquiry()">{{ language.text().copyInquiry }}</button>
+              <button type="button" (click)="copyInquiry()">{{ language.current() === 'vi' ? 'Sao chép thông tin sản phẩm' : 'Copy product details' }}</button>
+            </div>
+            <p class="buy-label">{{ language.current() === 'vi' ? 'Tiếp tục mua hàng qua' : 'Continue to buy via' }}</p>
+            <div class="chat-actions">
+              <a href="https://ig.me/m/thich_mac_dep_vn" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>Instagram</a>
+              <a href="https://www.tiktok.com/@thich_mac_dep_vn" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 2h3a5 5 0 0 0 3.5 4.8v3.1a8 8 0 0 1-3.5-1.3v6.3a6 6 0 1 1-5.2-5.9v3.1a3 3 0 1 0 2.2 2.9V2Z"/></svg>TikTok</a>
             </div>
             <p class="copy-status" aria-live="polite">{{ copyStatus() }}</p>
           </div>

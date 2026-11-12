@@ -87,7 +87,11 @@ describe('product detail page', () => {
     try {
       await fixture.componentInstance.copyInquiry();
       expect(writeText).toHaveBeenCalledWith(expect.stringContaining('size: S / color: Blue (SKU-S)'));
-    } finally { vi.unstubAllGlobals(); }
+      expect(writeText).toHaveBeenLastCalledWith(expect.stringContaining('Xin chào, tôi quan tâm đến sản phẩm Synthetic garment'));
+      fixture.componentInstance.language.set('en');
+      await fixture.componentInstance.copyInquiry();
+      expect(writeText).toHaveBeenLastCalledWith(expect.stringContaining("Hello, I'm interested in Synthetic garment"));
+    } finally { fixture.componentInstance.language.set('vi'); localStorage.removeItem('storefront-language'); vi.unstubAllGlobals(); }
   });
   it('sorts sizes deterministically without mutating input', () => {
     const sizes = Object.freeze(['zeta', 'xxl', 'M', 'xs', 'L', 'S', 'XL', 'XXS', 'alpha', 'm']);
@@ -137,7 +141,10 @@ describe('product detail page', () => {
     expect(element.textContent).toContain('Synthetic category');
     expect(element.textContent).toContain('120.000');
     expect(element.querySelector('a[href="https://example.test/contact"]')).not.toBeNull();
-    expect(element.textContent).not.toContain('Instagram');
+    expect(element.querySelector('a[href="https://ig.me/m/thich_mac_dep_vn"]')?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(element.querySelector('a[href="https://www.tiktok.com/@thich_mac_dep_vn"]')?.getAttribute('target')).toBe('_blank');
+    expect(element.querySelector('.buy-label')?.textContent).toContain('Tiếp tục mua hàng qua');
+    expect(element.querySelectorAll('.chat-actions svg[aria-hidden="true"]').length).toBe(2);
     fixture.componentInstance.selectedVariant.set('v');
     fixture.detectChanges();
     expect(element.textContent).toContain('150.000');

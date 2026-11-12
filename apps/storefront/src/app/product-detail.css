@@ -16,8 +16,11 @@ h1 { font-size: 26px; font-weight: 600; margin: 0; }
 .info p { line-height: 1.7; }
 fieldset { border: 0; padding: 0; margin: 32px 0; }
 legend, h2 { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 12px; }
-.variants, .contact-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-button, .contact-actions a { font: inherit; cursor: pointer; border: 1px solid #ccc; background: white; color: #222; padding: 10px 14px; }
+.variants, .contact-actions, .chat-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button, .contact-actions a, .chat-actions a { font: inherit; cursor: pointer; border: 1px solid #ccc; background: white; color: #222; padding: 10px 14px; }
+.contact .buy-label { margin: 18px 0 8px; color: #777; font-size: 12px; font-weight: 500; }
+.chat-actions a { display: inline-flex; align-items: center; gap: 8px; }
+.chat-actions svg { width: 18px; height: 18px; flex: none; }
 .variants button.active { background: #222; color: white; border-color: #222; }
 .contact { border-top: 1px solid #e5e5e5; border-bottom: 1px solid #e5e5e5; padding: 24px 0; margin: 32px 0; }
 .contact p, .metadata { color: #777; font-size: 13px; }
