@@ -39,17 +39,19 @@ function positiveInteger(value: string | undefined, fallback: number): number | 
 }
 
 app.get('/api/products', async (context) => {
-  if (!validQuery(context.req.url, ['page', 'pageSize', 'keyword', 'category'])) return context.json(invalidQuery, 400);
+  if (!validQuery(context.req.url, ['page', 'pageSize', 'keyword', 'category', 'sort'])) return context.json(invalidQuery, 400);
   const page = positiveInteger(context.req.query('page'), 1);
   const pageSize = positiveInteger(context.req.query('pageSize'), 20);
   const keyword = context.req.query('keyword');
   const category = context.req.query('category');
+  const sort = context.req.query('sort') ?? 'newest';
   if (page === null || pageSize === null || pageSize > 100 || !Number.isSafeInteger((page - 1) * pageSize)
     || (keyword !== undefined && (!keyword.trim() || keyword.length > 200))
-    || (category !== undefined && (!category.trim() || category.length > 200))) {
+    || (category !== undefined && (!category.trim() || category.length > 200))
+    || !['newest', 'price-asc', 'price-desc', 'name-asc', 'name-desc'].includes(sort)) {
     return context.json(invalidQuery, 400);
   }
-  const result = await listProducts(context.env.DB, { page, pageSize, keyword, category });
+  const result = await listProducts(context.env.DB, { page, pageSize, keyword, category, sort: sort as import('./services/catalog.service').ProductSort });
   context.header('Cache-Control', 'public, max-age=60');
   return context.json(result);
 });

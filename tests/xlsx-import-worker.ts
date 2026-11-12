@@ -28,37 +28,52 @@ async function testSyntheticWorkbook(db: D1Database) {
   for (let item = 0; item < 18; item++) {
     addGood(`SYNTH-ONE${item}`, `Synthetic standalone ${item}`, `Synthetic category ${item % 5}`, '');
   }
+  // Suffix-only size family infers dimensions when the attribute cell is blank.
+  for (const size of ['S', 'M', 'L']) addGood(`SYNTH-QD2-${size}`, `Synthetic suffix family - ${size}`, 'Synthetic category 0', '');
   for (let service = 0; service < 2; service++) {
     rows.push({ 'Loại hàng': 'Dịch vụ', 'Mã hàng': `SYNTH-SERVICE${service}`, 'Thuộc tính': '' });
   }
-  check(imageNumber === 539, 'synthetic URL count');
+  check(imageNumber === 548, 'synthetic URL count');
   const preview = await previewXlsxImport(db, rows);
   check(preview.errors.length === 0 && preview.skipped.length === 2, 'synthetic preview validation');
-  check(preview.counts.rows === 185 && preview.counts.goods === 183 && preview.counts.services === 2 &&
-    preview.counts.products === 73 && preview.counts.creates === 73 && preview.counts.updates === 0 &&
-    preview.counts.images === 539, 'synthetic preview counts');
+  check(preview.counts.rows === 188 && preview.counts.goods === 186 && preview.counts.services === 2 &&
+    preview.counts.products === 74 && preview.counts.creates === 74 && preview.counts.updates === 0 &&
+    preview.counts.images === 548, 'synthetic preview counts');
   const created = await applyXlsxImport(db, rows, preview.digest, preview.catalogSnapshot);
-  check(created.created === 73 && created.updated === 0, 'synthetic create counts');
+  check(created.created === 74 && created.updated === 0, 'synthetic create counts');
   const mappings = async () => (await db.prepare("SELECT sku, product_id, variant_id FROM xlsx_variant_mappings WHERE sku LIKE 'synth-%' ORDER BY sku").all<{ sku: string; product_id: string; variant_id: string }>()).results;
   const initial = await mappings();
-  check(initial.length === 183 && new Set(initial.map(item => item.variant_id)).size === 183 &&
-    new Set(initial.map(item => item.product_id)).size === 73, 'synthetic mapping counts');
+  check(initial.length === 186 && new Set(initial.map(item => item.variant_id)).size === 186 &&
+    new Set(initial.map(item => item.product_id)).size === 74, 'synthetic mapping counts');
+  check(new Set(initial.filter(item => item.sku.startsWith('synth-qd2-')).map(item => item.product_id)).size === 1,
+    'suffix-only S/M/L family not grouped');
+  const inferred = await db.prepare("SELECT v.attributes_json, p.name FROM xlsx_variant_mappings m JOIN product_variants v ON v.id = m.variant_id JOIN products p ON p.id = m.product_id WHERE m.sku LIKE 'synth-qd2-%' ORDER BY m.sku").all<{ attributes_json: string; name: string }>();
+  check(inferred.results.map(item => JSON.parse(item.attributes_json).size).sort().join(',') === 'L,M,S' &&
+    inferred.results.every(item => item.name === 'Synthetic suffix family'), 'inferred sizes or group name not persisted');
+  const partial = rows.filter(item => item['Mã hàng'] === 'SYNTH-QD2-M');
+  const partialPreview = await previewXlsxImport(db, partial);
+  check(partialPreview.errors.length > 0, 'unsafe partial inferred family accepted');
+  let partialRejected = false;
+  try { await applyXlsxImport(db, partial, partialPreview.digest, partialPreview.catalogSnapshot); } catch { partialRejected = true; }
+  check(partialRejected, 'unsafe partial inferred family applied');
+  check(new Set(initial.filter(item => item.sku.startsWith('synth-one')).map(item => item.product_id)).size === 18,
+    'standalone products with similar labels were grouped');
   for (let group = 0; group < 55; group++) {
     const variants = initial.filter(item => item.sku.startsWith(`synth-g${group}-`));
     check(variants.length === 3 && new Set(variants.map(item => item.product_id)).size === 1, 'synthetic size grouping');
   }
   const counts = async () => db.prepare("SELECT (SELECT COUNT(*) FROM product_variants WHERE id IN (SELECT variant_id FROM xlsx_variant_mappings WHERE sku LIKE 'synth-%')) AS variants, (SELECT COUNT(*) FROM product_images WHERE product_id IN (SELECT product_id FROM xlsx_variant_mappings WHERE sku LIKE 'synth-%')) AS images").first<{ variants: number; images: number }>();
   const before = await counts();
-  check(before?.variants === 183 && before.images === 539, 'synthetic persisted counts');
+  check(before?.variants === 186 && before.images === 548, 'synthetic persisted counts');
   const replayPreview = await previewXlsxImport(db, rows);
   check(replayPreview.errors.length === 0 && replayPreview.skipped.length === 2 &&
-    replayPreview.counts.creates === 0 && replayPreview.counts.updates === 73 && replayPreview.counts.images === 539,
+    replayPreview.counts.creates === 0 && replayPreview.counts.updates === 74 && replayPreview.counts.images === 548,
     'synthetic replay preview');
   const replay = await applyXlsxImport(db, rows, replayPreview.digest, replayPreview.catalogSnapshot);
-  check(replay.created === 0 && replay.updated === 73, 'synthetic replay counts');
+  check(replay.created === 0 && replay.updated === 74, 'synthetic replay counts');
   check(JSON.stringify(initial) === JSON.stringify(await mappings()), 'synthetic replay identity changed');
   const after = await counts();
-  check(after?.variants === 183 && after.images === 539, 'synthetic replay persisted counts');
+  check(after?.variants === 186 && after.images === 548, 'synthetic replay persisted counts');
 }
 
 async function testSlugs(db: D1Database) {

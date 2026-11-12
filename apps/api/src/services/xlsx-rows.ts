@@ -66,6 +66,11 @@ function size(value: Cell | undefined): string | null | false {
   return normalize(match[2]);
 }
 
+function groupName(name: string, variantSize: string): string {
+  const match = /^(.*?)\s+-\s*([^\s]+)\s*$/u.exec(name);
+  return match && normalize(match[1]) && fold(match[2]) === fold(variantSize) ? normalize(match[1]) : name;
+}
+
 /** Rows start at spreadsheet row 2. Hostnames are exact allowlist entries supplied
  * by trusted configuration; this function never requests or resolves URLs. */
 export function validateXlsxRows(rows: readonly ImportRow[], trustedImageHosts: readonly string[]): ImportPreview {
@@ -79,6 +84,23 @@ export function validateXlsxRows(rows: readonly ImportRow[], trustedImageHosts: 
   }
   const groups = new Map<string, ImportProduct>();
   const codes = new Map<string, number>();
+  // Infer SIZE only for a recognizable SKU family with multiple distinct members.
+  // A lone SKU ending in one of these letters remains a standalone product.
+  const inferredSizes = new Map<number, string>();
+  const suffixFamilies = new Map<string, { index: number; suffix: string }[]>();
+  rows.forEach((row, index) => {
+    if (fold(text(row['Loại hàng'])) !== fold('Hàng hóa')) return;
+    const sku = text(row['Mã hàng']);
+    const match = /^(.*)-(XXXS|XXS|XS|S|M|L|XL|XXL|XXXL|[2-9]XL)$/i.exec(sku);
+    if (!match || !normalize(match[1])) return;
+    const key = fold(match[1]);
+    const family = suffixFamilies.get(key) ?? [];
+    family.push({ index, suffix: match[2].toUpperCase() });
+    suffixFamilies.set(key, family);
+  });
+  for (const family of suffixFamilies.values()) if (new Set(family.map(member => member.suffix)).size > 1) {
+    for (const member of family) inferredSizes.set(member.index, member.suffix);
+  }
   rows.forEach((row, index) => {
     const number = index + 2;
     if (Object.values(row).some(value => typeof value === 'string' && value.length > MAX_CELL_LENGTH)) {
@@ -100,7 +122,8 @@ export function validateXlsxRows(rows: readonly ImportRow[], trustedImageHosts: 
     const active = flag(row['Đang kinh doanh']);
     const directSale = flag(row['Được bán trực tiếp']);
     const imageUrls = images(row['Hình ảnh (url1,url2...)'], trustedImageHosts);
-    const variantSize = size(row['Thuộc tính']);
+    const explicitSize = size(row['Thuộc tính']);
+    const variantSize = explicitSize === null ? inferredSizes.get(index) ?? null : explicitSize;
     if (!sku) fail(number, 'Mã hàng', 'SKU must be nonempty text');
     if (sku) {
       const key = fold(sku);
@@ -122,14 +145,15 @@ export function validateXlsxRows(rows: readonly ImportRow[], trustedImageHosts: 
       } else key = normalize(sku.slice(0, separator));
     }
     if (errors.length !== start || amount === null || active === null || directSale === null || !imageUrls || variantSize === false) return;
-    const item: ImportItem = { row: number, sku, name, category, brand, price: amount, active, directSale, images: imageUrls, size: variantSize };
+    const normalizedName = variantSize === null ? name : groupName(name, variantSize);
+    const item: ImportItem = { row: number, sku, name: normalizedName, category, brand, price: amount, active, directSale, images: imageUrls, size: variantSize };
     const groupKey = fold(key);
     const existing = groups.get(groupKey);
     if (!existing) { groups.set(groupKey, { key, variants: [item], standalone: variantSize === null }); return; }
     const first = existing.variants[0];
     if (existing.standalone || variantSize === null) fail(number, 'Mã hàng', `Standalone/group key collision (also row ${first.row})`);
     if (existing.variants.some(variant => variant.size !== null && variantSize !== null && fold(variant.size) === fold(variantSize))) fail(number, 'Thuộc tính', 'Duplicate SIZE in group');
-    if (first.name !== name || first.brand !== brand || first.category !== category || first.price !== amount || first.active !== active || first.directSale !== directSale) {
+    if (first.name !== normalizedName || first.brand !== brand || first.category !== category || first.price !== amount || first.active !== active || first.directSale !== directSale) {
       fail(number, '', `Conflicting group fields (also row ${first.row})`);
     }
     existing.variants.push(item);

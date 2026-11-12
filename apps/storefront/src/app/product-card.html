@@ -1,0 +1,22 @@
+<article class="card">
+  <a class="card-link" [routerLink]="['/products', product().slug]">
+    <div class="media">
+      @if (imageUrl(); as url) {
+        <img [src]="url" [alt]="product().primaryImage?.altText || product().name" (error)="imageFailed(url)" loading="lazy">
+      } @else {
+          <div class="image-fallback" role="img" [attr.aria-label]="language.text().noImagePrefix + ' ' + product().name">
+          <span aria-hidden="true">{{ language.text().imageUnavailable }}</span>
+        </div>
+      }
+    </div>
+    <div class="details">
+      <h3>{{ product().name }}</h3>
+      @if (price(); as amount) {
+        <p class="price">{{ amount }}</p>
+      }
+      @if (product().sizes.length) {
+        <p class="sizes"><span class="visually-hidden">{{ language.text().size }}: </span>{{ product().sizes.join(' · ') }}</p>
+      }
+    </div>
+  </a>
+</article>

@@ -111,7 +111,20 @@ test('local D1 catalog integration', { timeout: 120000 }, async (t) => {
       ('test-image-subdomain', 'prod-linen-shirt', 'https://cdn2-retail-images.kiotviet.vn.evil.test/unsafe', NULL, NULL, 3, '2020', '2020'),
       ('test-image-user', 'prod-linen-shirt', 'https://user@cdn2-retail-images.kiotviet.vn/unsafe', NULL, NULL, 4, '2020', '2020'),
       ('test-image-port', 'prod-linen-shirt', 'https://cdn2-retail-images.kiotviet.vn:444/unsafe', NULL, NULL, 5, '2020', '2020'),
-      ('test-image-invalid', 'prod-linen-shirt', 'not-a-url', NULL, NULL, 6, '2020', '2020');`]);
+      ('test-image-invalid', 'prod-linen-shirt', 'not-a-url', NULL, NULL, 6, '2020', '2020'),
+      ('test-image-cotton-invalid', 'prod-cotton-tee', 'https://evil.test/private-image-sentinel', NULL, NULL, 0, '2020', '2020');
+      INSERT INTO product_variants (id, product_id, name, attributes_json, is_active) VALUES
+      ('test-cotton-a', 'prod-cotton-tee', 'A', '{"size":" S "}', 1),
+      ('test-cotton-b', 'prod-cotton-tee', 'B', '{"size":"S"}', 1),
+      ('test-cotton-c', 'prod-cotton-tee', 'C', '{"size":"XL"}', 1),
+      ('test-cotton-d', 'prod-cotton-tee', 'D', 'not-json', 1),
+      ('test-cotton-e', 'prod-cotton-tee', 'E', '{"size":42}', 1),
+      ('test-cotton-f', 'prod-cotton-tee', 'F', '{"size":"inactive-size-sentinel"}', 0),
+       ('test-cotton-g', 'prod-cotton-tee', 'G', '[{"size":"array-size-sentinel"}]', 1),
+       ('test-cotton-h', 'prod-cotton-tee', 'H', '{"size":"m","color":"Red"}', 1),
+       ('test-cotton-i', 'prod-cotton-tee', 'I', '{"size":"xs","color":"Blue"}', 1),
+       ('test-cotton-j', 'prod-cotton-tee', 'J', '{"size":"zeta"}', 1),
+       ('test-cotton-k', 'prod-cotton-tee', 'K', '{"size":"alpha"}', 1);`]);
     await withWorker('wrangler.jsonc', async (url) => {
       async function get(path, status = 200) {
         const response = await fetch(`${url}${path}`);
@@ -122,30 +135,54 @@ test('local D1 catalog integration', { timeout: 120000 }, async (t) => {
       await t.test('pagination, visibility and limits', async () => {
         const all = await get('/api/products');
         assert.equal(all.total, 3);
-        assert.deepEqual(slugs(all), ['linen-shirt', 'cotton-tee', 'wide-trousers']);
+        assert.deepEqual(slugs(all), ['cotton-tee', 'linen-shirt', 'wide-trousers']);
         const first = await get('/api/products?page=1&pageSize=2');
         const second = await get('/api/products?page=2&pageSize=2');
         assert.deepEqual([first.total, first.page, first.pageSize], [3, 1, 2]);
-        assert.deepEqual(slugs(first), ['linen-shirt', 'cotton-tee']);
+        assert.deepEqual(slugs(first), ['cotton-tee', 'linen-shirt']);
         assert.deepEqual(slugs(second), ['wide-trousers']);
         assert.deepEqual(slugs(await get('/api/products?page=3&pageSize=2')), []);
         assert.equal((await get('/api/products?pageSize=100')).pageSize, 100);
-        for (const query of ['page=0', 'page=-1', 'page=1.5', 'page=9007199254740992', 'page=9007199254740991&pageSize=100', 'pageSize=0', 'pageSize=101', 'page=1&page=2', 'extra=x', 'keyword=', 'keyword=%20', 'category=', `keyword=${'x'.repeat(201)}`, `category=${'x'.repeat(201)}`]) {
+        for (const query of ['page=0', 'page=-1', 'page=1.5', 'page=9007199254740992', 'page=9007199254740991&pageSize=100', 'pageSize=0', 'pageSize=101', 'page=1&page=2', 'extra=x', 'keyword=', 'keyword=%20', 'category=', 'sort=', 'sort=invalid', 'sort=newest&sort=price-asc', `keyword=${'x'.repeat(201)}`, `category=${'x'.repeat(201)}`]) {
           assert.equal((await get(`/api/products?${query}`, 400)).error.code, 'INVALID_QUERY');
         }
       });
       await t.test('keyword and category filtering', async () => {
+        await runD1(persistPath, ['execute', 'DB', '--command', "UPDATE products SET name = 'Áo Khoác Đẹp', slug = 'ao-khoac-dep', sku = 'JKT-Đ01' WHERE id = 'prod-wide-trousers';"]);
         assert.deepEqual(slugs(await get('/api/products?keyword=linen')), ['linen-shirt']);
         assert.deepEqual(slugs(await get('/api/products?keyword=TOP-COTTON')), ['cotton-tee']);
         for (const keyword of ['%', '_', '\\']) {
           assert.deepEqual(slugs(await get(`/api/products?keyword=${encodeURIComponent(keyword)}`)), []);
         }
-        assert.deepEqual(slugs(await get('/api/products?category=tops')), ['linen-shirt', 'cotton-tee']);
+        assert.deepEqual(slugs(await get('/api/products?category=tops')), ['cotton-tee', 'linen-shirt']);
         assert.deepEqual(slugs(await get('/api/products?category=tops&keyword=linen')), ['linen-shirt']);
         assert.deepEqual(slugs(await get('/api/products?category=accessories')), []);
         assert.deepEqual(slugs(await get('/api/products?category=unknown')), []);
+        for (const keyword of ['Áo Khoác', 'Ao Khoac', 'áO kHOÁC', 'đẹp', 'DEP']) {
+          const result = await get(`/api/products?keyword=${encodeURIComponent(keyword)}`);
+          assert.deepEqual(slugs(result), ['ao-khoac-dep'], keyword);
+          assert.equal(result.total, 1, keyword);
+        }
+        const page = await get('/api/products?keyword=ao&page=1&pageSize=1');
+        assert.equal(page.total, 1);
+        await runD1(persistPath, ['execute', 'DB', '--command', "UPDATE products SET name = 'Wide Trousers', slug = 'wide-trousers', sku = 'BTM-WIDE-03' WHERE id = 'prod-wide-trousers';"]);
+      });
+      await t.test('list images and active variant sizes are safe and ordered', async () => {
+        const all = await get('/api/products');
+        assert.deepEqual(all.items.map(({ primaryImage, sizes }) => ({ primaryImage, sizes })), [
+          { primaryImage: null, sizes: ['xs', 'S', 'm', 'XL', 'alpha', 'zeta'] },
+          { primaryImage: { url: 'https://cdn2-retail-images.kiotviet.vn/synthetic-first.jpg', altText: 'Synthetic' }, sizes: ['M', 'L'] },
+          { primaryImage: null, sizes: [] },
+        ]);
+        const page = await get('/api/products?page=2&pageSize=1');
+        assert.deepEqual(page.items[0], all.items[1]);
+        const list = JSON.stringify(all);
+        assert.doesNotMatch(list, /test-image|test-cotton|private-image-sentinel|inactive-size-sentinel|array-size-sentinel|attributesJson/i);
       });
       await t.test('details and public fields do not expose provider or sync data', async () => {
+        const cotton = await get('/api/products/cotton-tee');
+        assert.ok(cotton.variants.some((variant) => variant.id === 'test-cotton-h'));
+        assert.ok(!cotton.variants.some((variant) => variant.id === 'test-cotton-f'));
         const product = await get('/api/products/linen-shirt');
         assert.equal(product.id, 'prod-linen-shirt');
         assert.deepEqual(product.website, { seoTitle: 'Owner title', seoDescription: 'A light linen shirt.', marketingDescription: 'A versatile everyday layer.', isFeatured: true, displayOrder: 10 });
@@ -178,6 +215,41 @@ test('local D1 catalog integration', { timeout: 120000 }, async (t) => {
           }
         }
         assert.equal((await get('/api/products')).total, 3);
+      });
+      await t.test('sort options are deterministic across ties, filters and pages', async () => {
+        await runD1(persistPath, ['execute', 'DB', '--command', `
+          INSERT INTO categories (id, name, slug, is_active, created_at, updated_at) VALUES
+            ('cat-sort-test', 'Sort test', 'sort-test', 1, '2020', '2020');
+          INSERT INTO products (id, sku, slug, name, price_minor, currency, is_active, created_at, updated_at) VALUES
+            ('sort-a', 'SORT-A', 'sort-a', 'alpha', 200, 'VND', 1, '2025', '2025'),
+            ('sort-b', 'SORT-B', 'sort-b', 'Alpha', 200, 'VND', 1, '2025', '2025'),
+            ('sort-c', 'SORT-C', 'sort-c', 'Beta', 100, 'VND', 1, '2026', '2026'),
+            ('sort-d', 'SORT-D', 'sort-d', 'Gamma', NULL, 'VND', 1, '2024', '2024');
+          INSERT INTO product_category (product_id, category_id) VALUES
+            ('sort-a', 'cat-sort-test'), ('sort-b', 'cat-sort-test'),
+            ('sort-c', 'cat-sort-test'), ('sort-d', 'cat-sort-test');
+        `]);
+        const orders = {
+          newest: ['sort-c', 'sort-a', 'sort-b', 'sort-d'],
+          'price-asc': ['sort-c', 'sort-a', 'sort-b', 'sort-d'],
+          'price-desc': ['sort-a', 'sort-b', 'sort-c', 'sort-d'],
+          'name-asc': ['sort-a', 'sort-b', 'sort-c', 'sort-d'],
+          'name-desc': ['sort-d', 'sort-c', 'sort-a', 'sort-b'],
+        };
+        assert.deepEqual(slugs(await get('/api/products?category=sort-test')), orders.newest);
+        for (const [sort, expected] of Object.entries(orders)) {
+          const query = `/api/products?category=sort-test&sort=${sort}`;
+          const all = await get(query);
+          assert.equal(all.total, 4, sort);
+          assert.deepEqual(slugs(all), expected, sort);
+          const first = await get(`${query}&page=1&pageSize=2`);
+          const second = await get(`${query}&page=2&pageSize=2`);
+          assert.deepEqual([first.total, first.page, first.pageSize], [4, 1, 2], sort);
+          assert.deepEqual([second.total, second.page, second.pageSize], [4, 2, 2], sort);
+          assert.deepEqual(slugs(first), expected.slice(0, 2), sort);
+          assert.deepEqual(slugs(second), expected.slice(2), sort);
+          assert.deepEqual(slugs(await get(`${query}&keyword=alpha`)), expected.filter((slug) => slug === 'sort-a' || slug === 'sort-b'), sort);
+        }
       });
     }, persistPath);
   } finally {

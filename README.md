@@ -4,6 +4,8 @@ This workspace contains a catalog API, local D1/R2 bindings and an Angular SSR s
 
 **Phase 2 is complete locally, not production-ready.** The owner configured Google sign-in, imported the workbook through admin and confirmed reimport works. The workbook contained 183 goods, 2 services and 73 product groups. Edge rate limits, deployed same-origin routing and production OAuth configuration remain outstanding. See the [import contract](docs/xlsx-import-contract.md) and [project plan](ThichMacDep_AI_AGENT_PROJECT_PLAN.md).
 
+**Phase 3 is in progress, not complete.** The local Workers storefront uses the local catalog API and D1 state; it is not a production deployment.
+
 ## Fresh local setup
 
 Use Node `^22.22.3`, `^24.15.0` or `^26.0.0` and Corepack with pnpm `12.18.0` (see `package.json`). From the repository root:
@@ -11,17 +13,20 @@ Use Node `^22.22.3`, `^24.15.0` or `^26.0.0` and Corepack with pnpm `12.18.0` (s
 ```sh
 corepack pnpm install --frozen-lockfile
 corepack pnpm db:migrate:local
-corepack pnpm db:seed:local
 corepack pnpm typecheck:api
 corepack pnpm test:api
 corepack pnpm test:sync
 corepack pnpm test:storefront
 corepack pnpm test:storefront:ssr
 corepack pnpm test:storefront:proxy
+corepack pnpm test:storefront:catalog
+corepack pnpm test:storefront:browser # optional: installed Google Chrome and native Node WebSocket
 corepack pnpm exec node --test tests/xlsx-rows.test.mjs tests/xlsx-input.test.mjs
 ```
 
-The SSR smoke script builds the storefront, starts its own local Wrangler Worker on an available loopback port, checks the initial HTML and referenced JavaScript, and stops the Worker. It does not check browser hydration. The API tests start separate local Workers and exercise local D1 and R2. The test-only Worker and `wrangler.test.jsonc` must never be deployed.
+The SSR smoke script builds the storefront, starts its own local Wrangler Worker on an available loopback port, checks the initial HTML and referenced JavaScript, and stops the Worker. It does not check browser hydration. The catalog proof uses isolated synthetic D1 state and exercises the multiworker SSR path. The API tests start separate local Workers and exercise local D1 and R2. The test-only Worker and `wrangler.test.jsonc` must never be deployed.
+
+The optional browser test builds the storefront and uses local Workers, synthetic D1 data, and a temporary Chrome profile. It requires a supported Node version with native `WebSocket` and installed Google Chrome; set `CHROME_PATH` to its executable if it is not in a standard location. If either is unavailable the test reports a skip. Browser requests outside loopback are blocked; no screenshots are saved. It does not use local `.env` or existing D1 state.
 
 ## Run locally
 
@@ -31,15 +36,16 @@ In separate terminals as needed:
 # API: GET http://127.0.0.1:8787/api/health
 corepack pnpm dev:api
 
-# Angular development server: http://localhost:4200/products/sample
+# Angular development server for admin and proxy work only
 corepack pnpm dev:storefront
 
-# Local Workers SSR: request /products/sample at Wrangler's displayed URL
-corepack pnpm build:storefront
+# Data-backed local storefront SSR: http://localhost:4200
 corepack pnpm dev:storefront:worker
 ```
 
-For schema changes, `corepack pnpm db:generate` generates Drizzle migrations; apply them with `corepack pnpm db:migrate:local`, then run `corepack pnpm db:seed:local` for synthetic fixtures. Repeat seeding inserts missing fixture rows but does not overwrite existing rows or website settings. Wrangler persists local state under `.wrangler/`; do not commit it. D1's all-zero database ID is a placeholder. The configured bindings are local simulations, not remote resources.
+The two storefront commands both use port 4200; run only one at a time. **`dev:storefront` is not data-backed SSR**: use it with `dev:api` for admin/proxy development, not to verify the storefront catalog. `dev:storefront:worker` builds the storefront and starts the storefront and API Workers together, using the actual local D1 state under `.wrangler/state`; it does not connect to remote resources. Create a root `.env` as described below before starting it. Imported local catalog data remains in that state. Do not seed unless you explicitly want synthetic fixtures: `corepack pnpm db:seed:local` inserts missing fixture rows without overwriting existing rows or website settings. No contact links should be fabricated; configure real contacts in local settings when available.
+
+`SITE_ORIGIN` is a trusted site configuration used for absolute SEO URLs, not a value taken from a request host. The local worker command fixes it to `http://localhost:4200`; a future deployment must configure its own trusted origin. Catalog API success responses are publicly cacheable for 60 seconds, so changes may not appear immediately in caches. For schema changes, `corepack pnpm db:generate` generates Drizzle migrations; apply them with `corepack pnpm db:migrate:local`. Do not commit `.wrangler/`. D1's all-zero database ID is a placeholder. The configured bindings are local simulations, not remote resources.
 
 ### SEO slugs and local migration
 
@@ -77,11 +83,11 @@ The example address is intentionally invalid and must be replaced; first success
 
 Once signed in, an existing enabled administrator can add another lowercase Gmail address on `/admin/import`. The protected `POST /api/admin/users` requires the admin session, exact configured origin, and CSRF token. It only inserts new enabled admins; an existing or disabled account is not changed. The new account's Google subject is bound on its first successful sign-in. There is no public signup or removal UI; the initial owner must still be provisioned manually.
 
-**Deployment blockers:** the separate storefront Worker configuration does not forward `/api` to the API Worker. The Angular proxy applies only to `ng serve`, not the storefront Worker or production. Implement and test deployed same-origin forwarding, preserve origin/cookie security, configure HTTPS and edge rate limits, and verify real Google sign-in before launch. Concurrent non-XLSX catalog writers do not share the XLSX lock; production multi-writer use is unsafe until coordinated. No production resources have been created.
+**Deployment blockers:** local multiworker routing is not a deployed configuration. The Angular proxy applies only to `ng serve`. Implement and test deployed same-origin forwarding, preserve origin/cookie security, configure HTTPS and edge rate limits, and verify real Google sign-in before launch. Concurrent non-XLSX catalog writers do not share the XLSX lock; production multi-writer use is unsafe until coordinated. No production resources have been created.
 
 ## Local read-only API
 
-After migrating and seeding, start `corepack pnpm dev:api` and use the URL Wrangler displays (normally `http://localhost:8787`). For example:
+After migrating and importing local data (or optionally seeding synthetic fixtures), start `corepack pnpm dev:api` and use the URL Wrangler displays (normally `http://localhost:8787`). For example (the sample slugs require matching local data):
 
 ```sh
 curl 'http://localhost:8787/api/products?page=1&pageSize=2&category=tops&keyword=linen'

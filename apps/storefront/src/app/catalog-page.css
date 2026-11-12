@@ -1,0 +1,29 @@
+:host { display: block; color: #222; }
+.catalog { max-width: 1240px; margin: 0 auto; padding: 36px 24px 72px; }
+.breadcrumb, .eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #777; }
+.breadcrumb a, .categories a, .pagination a, .notice a { color: inherit; text-decoration: none; }
+.breadcrumb a:hover, .notice a { text-decoration: underline; }
+.heading-row { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin: 48px 0 32px; }
+.eyebrow { margin: 0 0 10px; color: #2e5a44; }
+h1 { font-size: clamp(26px, 3vw, 36px); font-weight: 500; margin: 0; }
+.search label { display: block; font-size: 12px; margin-bottom: 8px; }
+.search div { display: flex; border-bottom: 1px solid #222; }
+.search input { min-width: 200px; border: 0; padding: 10px 4px; font: inherit; }
+.search button { border: 0; background: transparent; padding: 10px; cursor: pointer; font: inherit; }
+.categories { display: flex; flex-wrap: wrap; gap: 12px 24px; border-bottom: 1px solid #e5e5e5; }
+.categories a { padding: 12px 0; color: #777; font-size: 13px; }
+.categories a[aria-current] { color: #2e5a44; border-bottom: 2px solid #2e5a44; }
+.catalog-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; margin-top: 24px; }
+.catalog-controls label { display: inline-flex; align-items: center; gap: 10px; color: #777; font-size: 13px; }
+.catalog-controls select { min-height: 40px; max-width: 100%; padding: 0 32px 0 12px; border: 1px solid #dedede; border-radius: 0; background-color: #fff; color: #333; font: inherit; cursor: pointer; }
+.catalog-controls select:focus-visible { outline: 2px solid #2e5a44; outline-offset: 2px; }
+.results { margin: 24px 0; color: #777; font-size: 13px; }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px 24px; }
+.pagination { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 48px; font-size: 13px; }
+.pagination a { border: 1px solid #e5e5e5; padding: 10px 14px; }
+.pagination a:hover { border-color: #222; }
+.notice { padding: 48px 0; color: #777; }
+.notice h1, .notice h2 { color: #222; }
+.notice h2 { font-size: 20px; font-weight: 500; }
+@media (max-width: 800px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 12px; } }
+@media (max-width: 600px) { .catalog { padding: 24px 16px 56px; } .heading-row { align-items: stretch; flex-direction: column; margin: 36px 0 24px; } .search input { flex: 1; min-width: 0; } }

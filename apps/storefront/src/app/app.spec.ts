@@ -15,7 +15,7 @@ describe('storefront', () => {
 
   it('renders the sample product route', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/products/sample', SampleProduct);
+    await harness.navigateByUrl('/_internal/sample', SampleProduct);
     expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toContain('Sample product');
   });
 });

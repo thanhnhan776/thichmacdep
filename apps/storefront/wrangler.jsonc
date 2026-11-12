@@ -4,9 +4,12 @@
   "main": "dist/storefront/server/server.mjs",
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat", "new_module_registry"],
+  "services": [{ "binding": "API", "service": "thichmacdep-api-local" }],
   "assets": {
     "directory": "./dist/storefront/browser",
     "binding": "ASSETS",
+    "html_handling": "none",
+    "not_found_handling": "none",
     "run_worker_first": true
   }
 }

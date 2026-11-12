@@ -1,0 +1,60 @@
+<a class="skip-link" href="#storefront-main">{{ language.text().skip }}</a>
+<header class="header">
+  <div class="header-inner">
+    <a class="wordmark" routerLink="/" aria-label="Thích Mặc Đẹp" (click)="closeMenus()"><img src="/tmd-logo-cropped.png" alt="Thích Mặc Đẹp"></a>
+    <div class="language-toggle" role="group" [attr.aria-label]="language.text().language">
+      <button type="button" [class.active]="language.current() === 'vi'" [attr.aria-pressed]="language.current() === 'vi'" aria-label="Tiếng Việt" (click)="language.set('vi')"><span aria-hidden="true">🇻🇳</span><span>Vie</span></button>
+      <button type="button" [class.active]="language.current() === 'en'" [attr.aria-pressed]="language.current() === 'en'" aria-label="English" (click)="language.set('en')"><span aria-hidden="true">🇬🇧</span><span>Eng</span></button>
+    </div>
+    <button class="menu-toggle" type="button" aria-controls="storefront-navigation" [attr.aria-expanded]="menuOpen()" (click)="menuOpen.set(!menuOpen()); categoriesOpen.set(false)">
+      {{ menuOpen() ? language.text().close : language.text().open }} <span aria-hidden="true">{{ menuOpen() ? '×' : '☰' }}</span>
+    </button>
+    <nav id="storefront-navigation" class="navigation" [class.open]="menuOpen()" [attr.aria-label]="language.text().menu" (keydown.escape)="closeMenus()">
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" (click)="closeMenus()">{{ language.text().home }}</a>
+      <a routerLink="/products" routerLinkActive="active" (click)="closeMenus()">{{ language.text().products }}</a>
+      @if (categories().length) {
+        <div class="category-menu">
+          <button type="button" aria-controls="storefront-categories" [attr.aria-expanded]="categoriesOpen()" (click)="categoriesOpen.set(!categoriesOpen())">{{ language.text().categories }} <span aria-hidden="true">⌄</span></button>
+          @if (categoriesOpen()) {
+            <ul id="storefront-categories" class="category-list">
+              @for (category of categories(); track category.id) {
+                <li><a routerLink="/products" [queryParams]="{category: category.slug}" (click)="closeMenus()">{{ category.name }}</a></li>
+              }
+            </ul>
+          }
+        </div>
+      }
+      @if (contacts().length) {
+        <a class="contact-link" [href]="contacts()[0].url" target="_blank" rel="noopener noreferrer">{{ contacts()[0].label }}</a>
+      }
+    </nav>
+  </div>
+</header>
+<main id="storefront-main" tabindex="-1">
+  @if (shellData()?.error) { <p role="alert">{{ language.text().unavailable }}</p> }
+  <router-outlet />
+</main>
+<footer class="footer">
+  <div class="footer-inner">
+    <div><a class="wordmark footer-brand" routerLink="/" aria-label="Thích Mặc Đẹp"><img src="/tmd-logo-cropped.png" alt="Thích Mặc Đẹp"></a></div>
+    <div>
+      <h2>{{ language.text().catalogue }}</h2>
+      <ul>
+        <li><a routerLink="/products">{{ language.text().products }}</a></li>
+        @for (category of categories(); track category.id) {
+          <li><a routerLink="/products" [queryParams]="{category: category.slug}">{{ category.name }}</a></li>
+        }
+      </ul>
+    </div>
+    @if (contacts().length) {
+      <div>
+          <h2>{{ language.text().contact }}</h2>
+        <ul>
+          @for (contact of contacts(); track contact.label) {
+            <li><a [href]="contact.url" target="_blank" rel="noopener noreferrer">{{ contact.label }}</a></li>
+          }
+        </ul>
+      </div>
+    }
+  </div>
+</footer>

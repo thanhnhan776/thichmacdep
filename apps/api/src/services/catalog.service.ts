@@ -1,4 +1,6 @@
 import { publicImageUrl } from './image-url.ts';
+import { normalizeSearchTerm } from './slugs.ts';
+import { sortGarmentSizes } from '../../../shared/garment-sizes.ts';
 
 /** Public catalog reads. Database errors are propagated to the caller. */
 export interface ProductListInput {
@@ -6,7 +8,9 @@ export interface ProductListInput {
   pageSize: number;
   keyword?: string;
   category?: string;
+  sort?: ProductSort;
 }
+export type ProductSort = 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc';
 
 export interface WebsiteProductSettings {
   seoTitle: string | null;
@@ -41,6 +45,12 @@ export interface ProductImage {
   url: string;
   altText: string | null;
   position: number;
+}
+
+/** List images omit database identifiers and positions. Sizes come from active variants. */
+export interface ProductListItem extends Product {
+  primaryImage: { url: string; altText: string | null } | null;
+  sizes: string[];
 }
 
 export interface ProductVariant {
@@ -102,8 +112,12 @@ function productFilters(input: ProductListInput): { where: string; args: string[
   const args: string[] = [];
   if (input.keyword) {
     const pattern = `%${input.keyword.replace(/[\\%_]/g, '\\$&')}%`;
-    conditions.push(`(p.name LIKE ? ESCAPE '\\' OR p.sku LIKE ? ESCAPE '\\')`);
-    args.push(pattern, pattern);
+    // SQLite's built-in LIKE is ASCII-case-insensitive, but neither case-folds
+    // Unicode reliably nor removes Vietnamese tone marks. Slugs already use
+    // the same accent-folding rules, so use them as a second searchable form.
+    const normalized = normalizeSearchTerm(input.keyword);
+    conditions.push(`(p.name LIKE ? ESCAPE '\\' OR p.sku LIKE ? ESCAPE '\\'${normalized ? " OR p.slug LIKE ? ESCAPE '\\'" : ''})`);
+    args.push(pattern, pattern, ...(normalized ? [`%${normalized.replace(/[\\%_]/g, '\\$&')}%`] : []));
   }
   if (input.category) {
     conditions.push(`EXISTS (SELECT 1 FROM product_category pc JOIN categories c ON c.id = pc.category_id
@@ -113,16 +127,58 @@ function productFilters(input: ProductListInput): { where: string; args: string[
   return { where: conditions.join(' AND '), args };
 }
 
-export async function listProducts(db: D1Database, input: ProductListInput): Promise<{ items: Product[]; total: number; page: number; pageSize: number }> {
+export async function listProducts(db: D1Database, input: ProductListInput): Promise<{ items: ProductListItem[]; total: number; page: number; pageSize: number }> {
   validatePagination(input.page, input.pageSize);
+  const sort = input.sort ?? 'newest';
+  const orders: Record<ProductSort, string> = {
+    newest: 'p.created_at DESC, p.id ASC',
+    'price-asc': 'p.price_minor IS NULL, p.price_minor ASC, p.id ASC',
+    'price-desc': 'p.price_minor IS NULL, p.price_minor DESC, p.id ASC',
+    'name-asc': 'p.name COLLATE NOCASE ASC, p.id ASC',
+    'name-desc': 'p.name COLLATE NOCASE DESC, p.id ASC',
+  };
+  if (!(sort in orders)) throw new RangeError('Invalid sort');
   const { where, args } = productFilters(input);
   const [rows, count] = await Promise.all([
     db.prepare(`SELECT ${PRODUCT_FIELDS} ${PRODUCT_FROM} WHERE ${where}
-      ORDER BY COALESCE(w.display_order, 0), p.name COLLATE NOCASE, p.id LIMIT ? OFFSET ?`)
+      ORDER BY ${orders[sort]} LIMIT ? OFFSET ?`)
       .bind(...args, input.pageSize, (input.page - 1) * input.pageSize).all<ProductRow>(),
     db.prepare(`SELECT COUNT(*) AS total ${PRODUCT_FROM} WHERE ${where}`).bind(...args).first<{ total: number }>(),
   ]);
-  return { items: rows.results.map(toProduct), total: count?.total ?? 0, page: input.page, pageSize: input.pageSize };
+  const items: ProductListItem[] = rows.results.map((row) => ({ ...toProduct(row), primaryImage: null, sizes: [] }));
+  if (items.length) {
+    const ids = items.map((item) => item.id);
+    const placeholders = ids.map(() => '?').join(', ');
+    const [images, variants] = await Promise.all([
+      db.prepare(`SELECT product_id AS productId, source_url AS url, alt_text AS altText
+        FROM product_images WHERE product_id IN (${placeholders}) ORDER BY product_id, position, id`)
+        .bind(...ids).all<{ productId: string; url: string | null; altText: string | null }>(),
+      db.prepare(`SELECT product_id AS productId, attributes_json AS attributesJson
+        FROM product_variants WHERE product_id IN (${placeholders}) AND is_active = 1
+        ORDER BY product_id, name COLLATE NOCASE, id`)
+        .bind(...ids).all<{ productId: string; attributesJson: string | null }>(),
+    ]);
+    const byId = new Map(items.map((item) => [item.id, item]));
+    for (const image of images.results) {
+      const item = byId.get(image.productId);
+      const url = publicImageUrl(image.url);
+      if (item && !item.primaryImage && url) item.primaryImage = { url, altText: image.altText };
+    }
+    for (const variant of variants.results) {
+      const item = byId.get(variant.productId);
+      if (!item || !variant.attributesJson) continue;
+      try {
+        const attributes: unknown = JSON.parse(variant.attributesJson);
+        if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) continue;
+        const size: unknown = (attributes as Record<string, unknown>).size;
+        if (typeof size === 'string' && size.trim() && !item.sizes.includes(size.trim())) item.sizes.push(size.trim());
+      } catch {
+        // Malformed provider attributes are not public size information.
+      }
+    }
+    for (const item of items) item.sizes = sortGarmentSizes(item.sizes);
+  }
+  return { items, total: count?.total ?? 0, page: input.page, pageSize: input.pageSize };
 }
 
 export async function getProductBySlug(db: D1Database, slug: string): Promise<ProductDetail | null> {

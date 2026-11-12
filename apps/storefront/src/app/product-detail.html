@@ -1,0 +1,59 @@
+@if (detail(); as page) {
+  @if (page.status === 'success') {
+    <main class="detail">
+      <nav class="breadcrumbs" [attr.aria-label]="language.text().breadcrumb">
+        <a routerLink="/">{{ language.text().home }}</a><span>/</span><a routerLink="/products">{{ language.text().products }}</a>
+        @for (category of page.product.categories; track category.id) {
+          <span>/</span><a routerLink="/products" [queryParams]="{ category: category.slug }">{{ category.name }}</a>
+        }
+        <span>/</span><span aria-current="page">{{ page.product.name }}</span>
+      </nav>
+      <div class="layout">
+        <section class="gallery" [attr.aria-label]="language.text().images">
+          <div class="frame">
+            @if (image(); as current) {
+              <img [src]="current.url" [alt]="current.altText || page.product.name" (error)="imageFailed(current.url)">
+            } @else { <span class="placeholder">{{ language.text().imageUnavailable }}</span> }
+          </div>
+          @if (images().length > 1) {
+            <div class="thumbnails">
+              @for (photo of images(); track photo.id) {
+                <button type="button" [class.active]="image()?.id === photo.id" [attr.aria-label]="language.text().viewImage + ' ' + ($index + 1)" [attr.aria-pressed]="image()?.id === photo.id" (click)="selectedImage.set(photo.id)">
+                  <img [src]="photo.url" [alt]="photo.altText || page.product.name" (error)="imageFailed(photo.url)">
+                </button>
+              }
+            </div>
+          }
+        </section>
+        <section class="info">
+          <h1>{{ page.product.name }}</h1><div class="rule"></div>
+          <p class="price">{{ price() || language.text().priceContact }}</p>
+          @if (page.product.shortDescription) { <p>{{ page.product.shortDescription }}</p> }
+          @if (page.product.variants.length) {
+            @for (dimension of variantDimensions(); track dimension.label) { <p class="metadata"><strong>{{ dimension.label }}:</strong> {{ dimension.values.join(', ') }}</p> }
+            <fieldset><legend>{{ language.text().variant }} @if (variant(); as selected) { <span>— {{ variantLabel(selected) }}</span> }</legend>
+              <div class="variants">@for (item of sortedVariants(); track item.id) {
+                <button type="button" [class.active]="variant()?.id === item.id" [attr.aria-pressed]="variant()?.id === item.id" (click)="selectedVariant.set(item.id)">{{ variantLabel(item) }}</button>
+              }</div>
+            </fieldset>
+          }
+          <div class="contact">
+            <h2>{{ language.text().contactStore }}</h2>
+            <p>{{ language.text().askStore }}</p>
+            <div class="contact-actions">
+              @for (contact of contacts(); track contact.label) { <a [href]="contact.url" target="_blank" rel="noopener noreferrer">{{ contact.label }}</a> }
+              <button type="button" (click)="copyInquiry()">{{ language.text().copyInquiry }}</button>
+            </div>
+            <p class="copy-status" aria-live="polite">{{ copyStatus() }}</p>
+          </div>
+          @if (page.product.sku) { <p class="metadata">SKU: {{ page.product.sku }}</p> }
+          @if (page.product.description) { <details open><summary>{{ language.text().description }}</summary><p class="description">{{ page.product.description }}</p></details> }
+        </section>
+      </div>
+    </main>
+  } @else if (page.status === 'not-found') {
+    <main class="message"><h1>{{ language.text().productMissing }}</h1><a routerLink="/products">{{ language.text().browse }}</a></main>
+  } @else {
+    <main class="message"><h1>{{ language.text().productUnavailable }}</h1><p>{{ language.text().tryLater }}</p></main>
+  }
+}

@@ -1,0 +1,51 @@
+<section class="catalog" aria-labelledby="catalog-heading">
+  @if (catalog(); as data) {
+    @if (data.status === 'success') {
+      <nav class="breadcrumb" [attr.aria-label]="language.text().breadcrumb"><a routerLink="/">{{ language.text().home }}</a><span aria-hidden="true"> / </span><a routerLink="/products">{{ language.text().products }}</a>@if (data.category) { <span aria-hidden="true"> / </span><span aria-current="page">{{ data.category.name }}</span> }</nav>
+      <div class="heading-row">
+          <div><p class="eyebrow">{{ language.text().collection }}</p><h1 id="catalog-heading">{{ data.category?.name || language.text().products }}</h1></div>
+        <form class="search" action="/products" (submit)="$event.preventDefault(); search(searchInput.value, data.query.category)">
+          <label for="catalog-search">{{ language.text().search }}</label>
+          <div><input #searchInput id="catalog-search" name="keyword" type="search" maxlength="200" [value]="data.query.keyword || ''" [placeholder]="language.text().searchPlaceholder"><button type="submit">{{ language.text().searchButton }}</button></div>
+        </form>
+      </div>
+      <nav class="categories" [attr.aria-label]="language.text().productCategories">
+        <a routerLink="/products" [queryParams]="{keyword: data.query.keyword}" [attr.aria-current]="!data.category ? 'page' : null">{{ language.text().all }}</a>
+        @for (category of data.categories; track category.id) {
+          <a routerLink="/products" [queryParams]="{category: category.slug, keyword: data.query.keyword}" [attr.aria-current]="data.category?.id === category.id ? 'page' : null">{{ category.name }}</a>
+        }
+      </nav>
+      <div class="catalog-controls">
+        <label>{{ language.current() === 'vi' ? 'Số sản phẩm mỗi trang' : 'Products per page' }}
+          <select [value]="data.query.pageSize" (change)="updateControls($any($event.target).value, data.query.sort!)">
+            <option value="12">12</option><option value="24">24</option><option value="48">48</option>
+          </select>
+        </label>
+        <label>{{ language.current() === 'vi' ? 'Sắp xếp' : 'Sort by' }}
+          <select [value]="data.query.sort || 'newest'" (change)="updateControls(data.query.pageSize!, $any($event.target).value)">
+            <option value="newest">{{ language.current() === 'vi' ? 'Mới nhất' : 'Newest' }}</option><option value="price-asc">{{ language.current() === 'vi' ? 'Giá tăng dần' : 'Price: low to high' }}</option><option value="price-desc">{{ language.current() === 'vi' ? 'Giá giảm dần' : 'Price: high to low' }}</option><option value="name-asc">Name A–Z</option><option value="name-desc">Name Z–A</option>
+          </select>
+        </label>
+      </div>
+      <p class="results" aria-live="polite">@if (data.products.items.length) { {{ language.text().showing }} {{ (data.products.page - 1) * data.products.pageSize + 1 }}–{{ (data.products.page - 1) * data.products.pageSize + data.products.items.length }} {{ language.text().of }} {{ data.products.total }} {{ language.text().results }} } @else { {{ data.products.total }} {{ language.text().results }} }</p>
+      @if (data.products.items.length) {
+        <div class="grid">@for (product of data.products.items; track product.id) { <app-product-card [product]="product" /> }</div>
+      } @else {
+        <div class="notice"><h2>{{ language.text().noProducts }}</h2><p>{{ language.text().tryOther }}</p><a routerLink="/products">{{ language.text().viewAll }}</a></div>
+      }
+      @if (data.products.page > 1 || data.products.page * data.products.pageSize < data.products.total) {
+        <nav class="pagination" [attr.aria-label]="language.text().productPages">
+          @if (data.products.page > 1) { <a routerLink="/products" [queryParams]="{keyword: data.query.keyword, category: data.query.category, pageSize: data.query.pageSize, sort: data.query.sort, page: data.products.page - 1}" [attr.aria-label]="language.text().previousPage">{{ language.text().previous }}</a> }
+          <span aria-current="page">{{ language.text().page }} {{ data.products.page }}</span>
+          @if (data.products.page * data.products.pageSize < data.products.total) { <a routerLink="/products" [queryParams]="{keyword: data.query.keyword, category: data.query.category, pageSize: data.query.pageSize, sort: data.query.sort, page: data.products.page + 1}" [attr.aria-label]="language.text().nextPage">{{ language.text().next }}</a> }
+        </nav>
+      }
+    } @else if (data.status === 'invalid') {
+      <div class="notice"><h1 id="catalog-heading">{{ language.text().invalid }}</h1><p>{{ language.text().checkSearch }}</p><a routerLink="/products">{{ language.text().viewAll }}</a></div>
+    } @else if (data.status === 'not-found') {
+      <div class="notice"><h1 id="catalog-heading">{{ language.text().categoryMissing }}</h1><p>{{ language.text().categoryUnavailable }}</p><a routerLink="/products">{{ language.text().viewAll }}</a></div>
+    } @else {
+      <div class="notice" role="alert"><h1 id="catalog-heading">{{ language.text().catalogUnavailable }}</h1><p>{{ language.text().loadError }}</p></div>
+    }
+  } @else { <p role="status" aria-live="polite">{{ language.text().loading }}</p> }
+</section>
