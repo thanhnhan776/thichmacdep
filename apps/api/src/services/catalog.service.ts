@@ -1,3 +1,5 @@
+import { publicImageUrl } from './image-url.ts';
+
 /** Public catalog reads. Database errors are propagated to the caller. */
 export interface ProductListInput {
   page: number;
@@ -127,7 +129,10 @@ export async function getProductBySlug(db: D1Database, slug: string): Promise<Pr
   const row = await db.prepare(`SELECT ${PRODUCT_FIELDS} ${PRODUCT_FROM} WHERE ${VISIBLE_PRODUCT} AND p.slug = ? LIMIT 1`)
     .bind(slug).first<ProductRow>();
   if (!row) return null;
-  const [variants, categories] = await Promise.all([
+  const [images, variants, categories] = await Promise.all([
+    db.prepare(`SELECT id, source_url AS url, alt_text AS altText, position
+      FROM product_images WHERE product_id = ? ORDER BY position, id`)
+      .bind(row.id).all<{ id: string; url: string | null; altText: string | null; position: number }>(),
     db.prepare(`SELECT id, sku, name, attributes_json AS attributesJson, price_minor AS priceMinor
       FROM product_variants WHERE product_id = ? AND is_active = 1 ORDER BY name COLLATE NOCASE, id`)
       .bind(row.id).all<ProductVariant>(),
@@ -135,8 +140,12 @@ export async function getProductBySlug(db: D1Database, slug: string): Promise<Pr
       WHERE pc.product_id = ? AND c.is_active = 1 ORDER BY c.name COLLATE NOCASE, c.id`)
       .bind(row.id).all<Category>(),
   ]);
-  // Provider URLs and storage keys are private until application-controlled delivery exists.
-  return { ...toProduct(row), images: [], variants: variants.results, categories: categories.results };
+  const publicImages: ProductImage[] = [];
+  for (const image of images.results) {
+    const url = publicImageUrl(image.url);
+    if (url) publicImages.push({ id: image.id, url, altText: image.altText, position: image.position });
+  }
+  return { ...toProduct(row), images: publicImages, variants: variants.results, categories: categories.results };
 }
 
 export async function listCategories(db: D1Database): Promise<Category[]> {

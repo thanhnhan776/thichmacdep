@@ -2,16 +2,18 @@
   "name": "thichmacdep",
   "private": true,
   "scripts": {
-    "dev:api": "wrangler dev --local",
+    "dev:api": "wrangler dev --local --ip 127.0.0.1 --port 8787 --env-file .env",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:seed:local": "wrangler d1 execute DB --local --file scripts/seed-local.sql",
     "typecheck:api": "tsc --noEmit",
     "test:api": "node --test tests/api.test.mjs",
+    "test:sync": "node --test tests/sync-repository.test.mjs",
     "dev:storefront": "pnpm --filter storefront start",
     "build:storefront": "pnpm --filter storefront build",
     "test:storefront": "pnpm --filter storefront test --watch=false",
     "test:storefront:ssr": "pnpm build:storefront && node --test tests/storefront-ssr.test.mjs",
+    "test:storefront:proxy": "node --test tests/storefront-proxy.test.mjs",
     "dev:storefront:worker": "wrangler dev --config apps/storefront/wrangler.jsonc --local --ip 127.0.0.1"
   },
   "packageManager": "pnpm@12.18.0",
@@ -20,7 +22,8 @@
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",
-    "hono": "4.13.18"
+    "hono": "4.13.18",
+    "jose": "6.2.13"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261110.1",

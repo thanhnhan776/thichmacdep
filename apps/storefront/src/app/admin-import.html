@@ -1,0 +1,70 @@
+<main class="admin">
+  <header class="heading">
+    <div><p class="eyebrow">Administration</p><h1>Import products</h1></div>
+    @if (session(); as user) {
+      <div class="account"><span>{{ user.user.email }}</span><button type="button" class="secondary" (click)="logout()" [disabled]="busy()">Sign out</button></div>
+    }
+  </header>
+  @if (message()) { <p class="notice" role="alert">{{ message() }}</p> }
+  @if (state() === 'loading') {
+    <p role="status">Checking your session…</p>
+  } @else if (state() === 'signed-out' || state() === 'denied') {
+    <section class="card" aria-labelledby="signin-title">
+      <h2 id="signin-title">Sign in</h2>
+      <p>Only authorized administrators can import products. Use your authorized Google account.</p>
+      <button type="button" (click)="signIn()" [disabled]="busy()">Prepare Google sign-in</button>
+      <div id="google-signin" class="google-button"></div>
+    </section>
+  } @else {
+    <section class="card" aria-labelledby="admins-title">
+      <h2 id="admins-title">Add an administrator</h2>
+      <p>Enter their lowercase Gmail address. They can sign in with Google after being added.</p>
+      <form (submit)="$event.preventDefault(); addAdmin(adminEmail.value, adminEmail)">
+        <label for="admin-email">Gmail address</label>
+        <div class="admin-form-controls">
+          <input #adminEmail id="admin-email" type="email" required maxlength="74" autocomplete="email" [disabled]="busy()">
+          <button type="submit" [disabled]="busy()">Add administrator</button>
+        </div>
+      </form>
+      @if (adminMessage()) { <p role="status">{{ adminMessage() }}</p> }
+    </section>
+    <section class="card" aria-labelledby="upload-title">
+      <h2 id="upload-title">Choose a workbook</h2>
+      <p>Choose a single-sheet XLSX file (maximum 5 MiB). The file is checked and previewed before any changes are made.</p>
+      <label for="workbook">XLSX workbook</label>
+      <input id="workbook" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" (change)="selectFile($event)" [disabled]="busy()">
+      @if (busy()) { <p role="status">Working…</p> }
+    </section>
+    @if (result(); as done) {
+      <section class="card success" role="status"><h2>Import complete</h2><p>Created {{ done.created }} products and updated {{ done.updated }} products.</p></section>
+    }
+    @if (preview(); as review) {
+      <section class="card" aria-labelledby="preview-title">
+        <h2 id="preview-title">Review preview</h2>
+        <p>Counts are estimates based on the current catalog. Applying may fail if the catalog changes.</p>
+        <dl class="counts">
+          <div><dt>Rows</dt><dd>{{ review.counts.rows }}</dd></div>
+          <div><dt>Goods</dt><dd>{{ review.counts.goods }}</dd></div>
+          <div><dt>Services</dt><dd>{{ review.counts.services }}</dd></div>
+          <div><dt>Unknown</dt><dd>{{ review.counts.unknown }}</dd></div>
+          <div><dt>Products</dt><dd>{{ review.counts.products }}</dd></div>
+          <div><dt>Image entries</dt><dd>{{ review.counts.images }}</dd></div>
+          <div><dt>To create</dt><dd>{{ review.counts.creates }}</dd></div>
+          <div><dt>To update</dt><dd>{{ review.counts.updates }}</dd></div>
+        </dl>
+        <h3>Errors ({{ review.errors.length }})</h3>
+        @if (review.errors.length) {
+          <ul>@for (issue of review.errors; track $index) { <li>Row {{ issue.row ?? '—' }}, {{ issue.column }}: {{ issue.reason }}</li> }</ul>
+          <p>Fix these errors and choose the file again before applying.</p>
+        } @else { <p>No validation errors.</p> }
+        <h3>Skipped ({{ review.skipped.length }})</h3>
+        @if (review.skipped.length) {
+          <ul>@for (issue of review.skipped; track $index) { <li>Row {{ issue.row ?? '—' }}, {{ issue.column }}: {{ issue.reason }}</li> }</ul>
+        } @else { <p>No skipped rows.</p> }
+        <p>Applying changes the catalog. Imports are limited to 400 rows, 100 product groups and 1,000 images.</p>
+        @if (applyLimitMessage(review); as limitMessage) { <p role="alert">{{ limitMessage }}</p> }
+        <button type="button" (click)="apply()" [disabled]="busy() || review.errors.length > 0 || !!applyLimitMessage(review)">Apply import</button>
+      </section>
+    }
+  }
+</main>

@@ -6,6 +6,44 @@ export const localSmokeChecks = sqliteTable('local_smoke_checks', {
   value: text('value').notNull(),
 });
 
+// Provision explicitly before sign-in; Google must verify the email before linking the subject.
+export const adminUsers = sqliteTable('admin_users', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull(),
+  googleSub: text('google_sub'),
+  role: text('role', { enum: ['admin', 'user'] }).notNull().default('user'),
+  isEnabled: integer('is_enabled', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  uniqueIndex('admin_users_email_unique').on(table.email),
+  uniqueIndex('admin_users_google_sub_unique').on(table.googleSub),
+  check('admin_users_email_normalized', sql`${table.email} = lower(trim(${table.email})) AND ${table.email} GLOB '*@gmail.com' AND length(${table.email}) > length('@gmail.com') AND instr(${table.email}, '@') = length(${table.email}) - length('@gmail.com') + 1`),
+  check('admin_users_role_valid', sql`${table.role} IN ('admin', 'user')`),
+  check('admin_users_enabled_valid', sql`${table.isEnabled} IN (0, 1)`),
+  check('admin_users_google_sub_nonempty', sql`${table.googleSub} IS NULL OR length(${table.googleSub}) > 0`),
+]);
+
+// Store only a cryptographic hash of the bearer token, never the token itself.
+export const adminSessions = sqliteTable('admin_sessions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => adminUsers.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull(),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  revokedAt: text('revoked_at'),
+}, (table) => [
+  uniqueIndex('admin_sessions_token_hash_unique').on(table.tokenHash),
+  index('admin_sessions_user_idx').on(table.userId),
+  index('admin_sessions_expires_idx').on(table.expiresAt),
+]);
+
+// One-time login challenges are stored hashed and consumed atomically.
+export const adminLoginChallenges = sqliteTable('admin_login_challenges', {
+  nonceHash: text('nonce_hash').primaryKey(),
+  expiresAt: text('expires_at').notNull(),
+});
+
 // All timestamps are UTC ISO-8601 text supplied by the application.
 export const products = sqliteTable('products', {
   id: text('id').primaryKey(),
@@ -72,6 +110,20 @@ export const productImages = sqliteTable('product_images', {
   check('product_images_size_nonnegative', sql`${table.sizeBytes} IS NULL OR (typeof(${table.sizeBytes}) = 'integer' AND ${table.sizeBytes} >= 0)`),
 ]);
 
+// Only rows created by XLSX may be removed by XLSX; reused editorial rows
+// remain owned by their original source. Position also records source order.
+export const xlsxProductImages = sqliteTable('xlsx_product_images', {
+  productId: text('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+  sourceUrl: text('source_url').notNull(),
+  imageId: text('image_id').notNull().references(() => productImages.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull(),
+  createdByXlsx: integer('created_by_xlsx', { mode: 'boolean' }).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.productId, table.sourceUrl] }),
+  index('xlsx_product_images_image_idx').on(table.imageId),
+  check('xlsx_product_images_owned_valid', sql`${table.createdByXlsx} IN (0, 1)`),
+]);
+
 // Variant fields remain optional where provider support is not yet known.
 export const productVariants = sqliteTable('product_variants', {
   id: text('id').primaryKey(),
@@ -98,6 +150,33 @@ export const externalProductMappings = sqliteTable('external_product_mappings', 
 }, (table) => [
   uniqueIndex('external_product_mappings_provider_external_unique').on(table.provider, table.externalId),
   index('external_product_mappings_product_idx').on(table.productId),
+]);
+
+// XLSX SKUs are normalized independently of the product grouping key.
+export const xlsxVariantMappings = sqliteTable('xlsx_variant_mappings', {
+  sku: text('sku').primaryKey(),
+  productId: text('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+  variantId: text('variant_id').notNull().references(() => productVariants.id, { onDelete: 'cascade' }),
+}, (table) => [uniqueIndex('xlsx_variant_mappings_variant_unique').on(table.variantId)]);
+
+// Existing mappings without this provenance are ambiguous and must not be adopted.
+export const xlsxProductState = sqliteTable('xlsx_product_state', {
+  productId: text('product_id').primaryKey().references(() => products.id, { onDelete: 'cascade' }),
+  groupingModel: text('grouping_model', { enum: ['standalone', 'group'] }).notNull(),
+  categoryId: text('category_id').notNull().references(() => categories.id),
+  version: integer('version').notNull().default(1),
+}, (table) => [check('xlsx_product_state_model_valid', sql`${table.groupingModel} IN ('standalone', 'group')`)]);
+
+export const externalCategoryMappings = sqliteTable('external_category_mappings', {
+  id: text('id').primaryKey(),
+  provider: text('provider').notNull(),
+  externalId: text('external_id').notNull(),
+  categoryId: text('category_id').notNull().references(() => categories.id, { onDelete: 'cascade' }),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  uniqueIndex('external_category_mappings_provider_external_unique').on(table.provider, table.externalId),
+  index('external_category_mappings_category_idx').on(table.categoryId),
 ]);
 
 export const websiteProductSettings = sqliteTable('website_product_settings', {
@@ -141,7 +220,9 @@ export const syncRuns = sqliteTable('sync_runs', {
   errorSummary: text('error_summary'),
   cursor: text('cursor'),
   watermark: text('watermark'),
-});
+}, (table) => [
+  uniqueIndex('sync_runs_provider_running_unique').on(table.provider).where(sql`${table.status} = 'running'`),
+]);
 
 export const syncEvents = sqliteTable('sync_events', {
   id: text('id').primaryKey(),

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `sync_runs_provider_running_unique` ON `sync_runs` (`provider`) WHERE "sync_runs"."status" = 'running';

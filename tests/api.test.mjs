@@ -104,6 +104,14 @@ test('local D1 catalog integration', { timeout: 120000 }, async (t) => {
     await seed();
     await runD1(persistPath, ['execute', 'DB', '--command', "UPDATE website_product_settings SET seo_title = 'Owner title' WHERE product_id = 'prod-linen-shirt'; UPDATE store_settings SET store_name = 'Owner store' WHERE id = 'default';"]);
     await seed();
+    await runD1(persistPath, ['execute', 'DB', '--command', `INSERT INTO product_images (id, product_id, source_url, r2_key, alt_text, position, created_at, updated_at) VALUES
+      ('test-image-later', 'prod-linen-shirt', 'https://cdn1-retail-images.kiotviet.vn/synthetic-later.jpg', 'private-r2-key-sentinel', NULL, 20, '2020', '2020'),
+      ('test-image-first', 'prod-linen-shirt', 'https://cdn2-retail-images.kiotviet.vn/synthetic-first.jpg', NULL, 'Synthetic', 1, '2020', '2020'),
+      ('test-image-http', 'prod-linen-shirt', 'http://cdn2-retail-images.kiotviet.vn/unsafe', NULL, NULL, 2, '2020', '2020'),
+      ('test-image-subdomain', 'prod-linen-shirt', 'https://cdn2-retail-images.kiotviet.vn.evil.test/unsafe', NULL, NULL, 3, '2020', '2020'),
+      ('test-image-user', 'prod-linen-shirt', 'https://user@cdn2-retail-images.kiotviet.vn/unsafe', NULL, NULL, 4, '2020', '2020'),
+      ('test-image-port', 'prod-linen-shirt', 'https://cdn2-retail-images.kiotviet.vn:444/unsafe', NULL, NULL, 5, '2020', '2020'),
+      ('test-image-invalid', 'prod-linen-shirt', 'not-a-url', NULL, NULL, 6, '2020', '2020');`]);
     await withWorker('wrangler.jsonc', async (url) => {
       async function get(path, status = 200) {
         const response = await fetch(`${url}${path}`);
@@ -142,7 +150,10 @@ test('local D1 catalog integration', { timeout: 120000 }, async (t) => {
         assert.equal(product.id, 'prod-linen-shirt');
         assert.deepEqual(product.website, { seoTitle: 'Owner title', seoDescription: 'A light linen shirt.', marketingDescription: 'A versatile everyday layer.', isFeatured: true, displayOrder: 10 });
         assert.equal(product.seoTitle, undefined);
-        assert.deepEqual(product.images, []);
+        assert.deepEqual(product.images, [
+          { id: 'test-image-first', url: 'https://cdn2-retail-images.kiotviet.vn/synthetic-first.jpg', altText: 'Synthetic', position: 1 },
+          { id: 'test-image-later', url: 'https://cdn1-retail-images.kiotviet.vn/synthetic-later.jpg', altText: null, position: 20 },
+        ]);
         assert.deepEqual(product.variants.map((variant) => variant.id).sort(), ['variant-linen-shirt-l', 'variant-linen-shirt-m']);
         assert.deepEqual(product.categories.map((category) => category.slug).sort(), ['clothing', 'tops']);
         for (const path of ['/api/products/missing', '/api/products/hidden-bag', '/api/products/inactive-hat']) {

@@ -1,12 +1,22 @@
 import { Hono } from 'hono';
 import { getCategoryBySlug, getProductBySlug, getStoreSettings, listCategories, listProducts } from './services/catalog.service';
+import { createAdminAuthRoutes } from './routes/admin-auth';
+import { createAdminImportRoutes } from './routes/admin-import';
+import { createAdminUserRoutes } from './routes/admin-users';
 
 export type Bindings = {
   DB: D1Database;
   IMAGES: R2Bucket;
+  GOOGLE_CLIENT_ID: string;
+  ADMIN_ORIGIN: string;
+  ADMIN_ALLOW_INSECURE_LOCALHOST?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+app.route('/api/admin/auth', createAdminAuthRoutes());
+app.route('/api/admin/import', createAdminImportRoutes());
+app.route('/api/admin/users', createAdminUserRoutes());
 
 app.get('/api/health', (context) => context.json({ status: 'ok' }));
 
