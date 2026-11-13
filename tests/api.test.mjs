@@ -86,8 +86,8 @@ test('health endpoint returns ok and does not expose write routes', async () => 
   });
 });
 
-async function runD1(persistPath, args) {
-  const child = spawn(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'd1', ...args, '--local', '--config', 'wrangler.jsonc', '--persist-to', persistPath], {
+async function runD1(persistPath, args, config = 'wrangler.jsonc') {
+  const child = spawn(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'd1', ...args, '--local', '--config', config, '--persist-to', persistPath], {
     cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WRANGLER_SEND_METRICS: 'false' },
   });
   let output = '';
@@ -257,10 +257,17 @@ test('local D1 catalog integration', { timeout: 120000 }, async (t) => {
   }
 });
 
-test('local D1 and R2 bindings round trip', async () => {
-  await withWorker('wrangler.test.jsonc', async (url) => {
-    const response = await fetch(url);
-    assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { d1: 'ok', r2: 'ok' });
-  });
+test('local D1 and R2 bindings round trip', { timeout: 120000 }, async () => {
+  const persistPath = await mkdtemp(join(tmpdir(), 'bindings-test-'));
+  try {
+    await runD1(persistPath, ['migrations', 'apply', 'DB'], 'wrangler.test.jsonc');
+    await withWorker('wrangler.test.jsonc', async (url) => {
+      const response = await fetch(url);
+      const body = await response.text();
+      assert.equal(response.status, 200, `Binding smoke test failed (${response.status}): ${body}`);
+      assert.deepEqual(JSON.parse(body), { d1: 'ok', r2: 'ok' });
+    }, persistPath);
+  } finally {
+    await rm(persistPath, { recursive: true, force: true });
+  }
 });

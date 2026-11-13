@@ -1,6 +1,8 @@
 # Production CI deployment
 
-Every push to `main` runs `.github/workflows/deploy.yml` and **is approval to change production**. There is no manual approval gate. Protect `main` with required reviews and restrict who can push or change the workflow. Configure these controls and the settings below before enabling or merging the workflow.
+`.github/workflows/ci.yml` runs tests and a separate build on pushes and pull requests without production secrets or remote operations. Production deployment uses `.github/workflows/deploy.yml` only through a manual **Run workflow** (`workflow_dispatch`); select the `main` branch. Runs selected from other refs skip the deploy job. Dispatch is authorization to change production; there is no additional approval gate. Protect `main` with required reviews and restrict who can dispatch or change the workflow. Configure these controls and the settings below before enabling or merging the workflow.
+
+The workflow definition in the pushed commit determines what runs on a push. This change stops automatic deployment only for commits containing the updated workflow; runs triggered by older commits can still use the old automatic deploy workflow.
 
 ## GitHub and Cloudflare setup
 
@@ -11,7 +13,7 @@ Every push to `main` runs `.github/workflows/deploy.yml` and **is approval to ch
 
 ## Execution and recovery
 
-The workflow installs the locked dependencies with Node 24 and pnpm, validates configuration, runs API typechecking and API, sync, storefront, SSR and catalog tests, and builds the storefront before any remote operation. It then applies D1 migrations, deploys the API with both production variables, deploys the storefront, and checks `/api/health` through the public storefront. The health check only confirms that endpoint responds with `status: ok`; it is not a complete production smoke test.
+The manual deployment checks out the selected dispatch SHA and independently installs the locked dependencies with Node 24 and pnpm, validates configuration, runs API typechecking and API, sync, storefront, SSR and catalog tests, and builds the storefront before any remote operation. It does not rely on an earlier CI run. It then applies D1 migrations, deploys the API with both production variables, deploys the storefront, and checks `/api/health` through the public storefront. The health check only confirms that endpoint responds with `status: ok`; it is not a complete production smoke test.
 
 Deployments are serialized and an in-progress run is not canceled, but GitHub concurrency can replace a pending run with a newer one. Do not rely on every intermediate commit deploying.
 
