@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "thichmacdep-api",
+  "main": "apps/api/src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "ADMIN_ORIGIN": "https://thichmacdep.nhanttdev.workers.dev",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "thichmacdep-prod",
+      "database_id": "585823c1-dcc4-470c-bff9-e6377bf691e0",
+      "migrations_dir": "drizzle/migrations",
+    },
+  ],
+}

@@ -1,0 +1,74 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.15.0
+
+      - name: Enable pnpm and install dependencies
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Validate Google client ID
+        env:
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+        run: |
+          if [[ ! "$GOOGLE_CLIENT_ID" =~ ^[0-9]+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$ ]]; then
+            echo 'GOOGLE_CLIENT_ID must be a valid Google OAuth web client ID.' >&2
+            exit 1
+          fi
+
+      - name: Typecheck and test
+        run: |
+          pnpm typecheck:api
+          pnpm test:api
+          pnpm test:sync
+          pnpm test:storefront
+          pnpm test:storefront:ssr
+          pnpm test:storefront:catalog
+
+      - name: Build storefront
+        run: pnpm build:storefront
+
+      - name: Apply production migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler d1 migrations apply DB --remote -c wrangler.production.jsonc
+
+      - name: Deploy API
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+        run: pnpm exec wrangler deploy -c wrangler.production.jsonc --var "GOOGLE_CLIENT_ID:$GOOGLE_CLIENT_ID" --var ADMIN_ORIGIN:https://thichmacdep.nhanttdev.workers.dev
+
+      - name: Deploy storefront
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy -c apps/storefront/wrangler.production.jsonc
+
+      - name: Check public API health
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors --output "$RUNNER_TEMP/health.json" https://thichmacdep.nhanttdev.workers.dev/api/health
+          node -e 'const health = require(process.argv[1]); if (health.status !== "ok") process.exit(1)' "$RUNNER_TEMP/health.json"

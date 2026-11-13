@@ -1,12 +1,13 @@
 import { AngularAppEngine, createRequestHandler } from '@angular/ssr';
 import { crawlerResponse } from './crawler';
+import { checkApiRateLimit, type RateLimitEnv } from './api-rate-limit';
 
 const angularApp = new AngularAppEngine();
 
 // The named handler is consumed by Angular's application builder and dev server.
 export const reqHandler = createRequestHandler((request: Request) => angularApp.handle(request));
 
-interface WorkerEnv {
+interface WorkerEnv extends RateLimitEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
   API: { fetch(request: Request): Promise<Response> };
   SITE_ORIGIN?: string;
@@ -15,7 +16,9 @@ interface WorkerEnv {
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const pathname = new URL(request.url).pathname;
-    if (pathname === '/api' || pathname.startsWith('/api/')) return env.API.fetch(request);
+    if (pathname === '/api' || pathname.startsWith('/api/')) {
+      return (await checkApiRateLimit(request, env)) ?? env.API.fetch(request);
+    }
     if (pathname === '/sitemap.xml' || pathname === '/robots.txt') {
       if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD', 'Cache-Control': 'no-store' } });
       return crawlerResponse(request, env.API, env.SITE_ORIGIN);

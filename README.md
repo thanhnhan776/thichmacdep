@@ -1,6 +1,6 @@
 # ThichMacDep — local catalog
 
-This workspace contains a catalog API, local D1/R2 bindings and an Angular SSR storefront. Generic catalog synchronization components are locally testable with synthetic data only; production infrastructure is not implemented.
+This workspace contains a catalog API, local D1/R2 bindings and an Angular SSR storefront. Generic catalog synchronization components are locally testable with synthetic data only; production configuration is prepared but not verified as deployed.
 
 **Phase 2 is complete locally, not production-ready.** The owner configured Google sign-in, imported the workbook through admin and confirmed reimport works. The workbook contained 183 goods, 2 services and 73 product groups. Edge rate limits, deployed same-origin routing and production OAuth configuration remain outstanding. See the [import contract](docs/xlsx-import-contract.md) and [project plan](ThichMacDep_AI_AGENT_PROJECT_PLAN.md).
 
@@ -45,7 +45,13 @@ corepack pnpm dev:storefront:worker
 
 The two storefront commands both use port 4200; run only one at a time. **`dev:storefront` is not data-backed SSR**: use it with `dev:api` for admin/proxy development, not to verify the storefront catalog. `dev:storefront:worker` builds the storefront and starts the storefront and API Workers together, using the actual local D1 state under `.wrangler/state`; it does not connect to remote resources. Create a root `.env` as described below before starting it. Imported local catalog data remains in that state. Do not seed unless you explicitly want synthetic fixtures: `corepack pnpm db:seed:local` inserts missing fixture rows without overwriting existing rows or website settings. No contact links should be fabricated; configure real contacts in local settings when available.
 
-`SITE_ORIGIN` is a trusted site configuration used for absolute SEO URLs, not a value taken from a request host. The local worker command fixes it to `http://localhost:4200`; a future deployment must configure its own trusted origin. Catalog API success responses are publicly cacheable for 60 seconds, so changes may not appear immediately in caches. For schema changes, `corepack pnpm db:generate` generates Drizzle migrations; apply them with `corepack pnpm db:migrate:local`. Do not commit `.wrangler/`. D1's all-zero database ID is a placeholder. The configured bindings are local simulations, not remote resources.
+`SITE_ORIGIN` is a trusted site configuration used for absolute SEO URLs, not a value taken from a request host. The local worker command fixes it to `http://localhost:4200`. Catalog API success responses are publicly cacheable for 60 seconds, so changes may not appear immediately in caches. For schema changes, `corepack pnpm db:generate` generates Drizzle migrations; apply them with `corepack pnpm db:migrate:local`. Do not commit `.wrangler/`. D1's all-zero database ID is a placeholder. The local bindings are simulations, not remote resources.
+
+### Production configuration (not deployed)
+
+`wrangler.production.jsonc` configures the nonpublic `thichmacdep-api` Worker and its production D1 `DB` binding; `apps/storefront/wrangler.production.jsonc` configures the public `thichmacdep` Worker, its assets and its `API` service binding. Use these explicit config paths for production operations, never the local configs. The storefront assumes the account's workers.dev subdomain is `nhantt`; verify that before deployment. No R2 binding is required by the current API routes.
+
+Before any authorized deployment, configure the API's `GOOGLE_CLIENT_ID` with a real Google OAuth web client ID and authorize `https://thichmacdep.nhanttdev.workers.dev` as a JavaScript origin in Google Cloud. The client ID is public, not a client secret; add it to the production API config's `vars` before deploying (do not add a placeholder). The API fails closed for admin authentication without it. Build the storefront before deploying, verify the production D1 identity and migration state, and deploy the API before the storefront. Production migrations and deployment are separate remote operations requiring explicit authorization. Review existing routes and access settings too: disabling workers.dev and preview URLs does not remove separately configured routes.
 
 ### SEO slugs and local migration
 
@@ -83,7 +89,7 @@ The example address is intentionally invalid and must be replaced; first success
 
 Once signed in, an existing enabled administrator can add another lowercase Gmail address on `/admin/import`. The protected `POST /api/admin/users` requires the admin session, exact configured origin, and CSRF token. It only inserts new enabled admins; an existing or disabled account is not changed. The new account's Google subject is bound on its first successful sign-in. There is no public signup or removal UI; the initial owner must still be provisioned manually.
 
-**Deployment blockers:** local multiworker routing is not a deployed configuration. The Angular proxy applies only to `ng serve`. Implement and test deployed same-origin forwarding, preserve origin/cookie security, configure HTTPS and edge rate limits, and verify real Google sign-in before launch. Concurrent non-XLSX catalog writers do not share the XLSX lock; production multi-writer use is unsafe until coordinated. No production resources have been created.
+**Deployment blockers:** the prepared multiworker configuration has not been deployed or tested remotely. The Angular proxy applies only to `ng serve`. Verify deployed same-origin forwarding and origin/cookie security, configure edge rate limits, and verify real Google sign-in before launch. Concurrent non-XLSX catalog writers do not share the XLSX lock; production multi-writer use is unsafe until coordinated.
 
 ## Local read-only API
 
