@@ -6,7 +6,7 @@
   "workers_dev": false,
   "preview_urls": false,
   "vars": {
-    "ADMIN_ORIGIN": "https://thichmacdep.nhanttdev.workers.dev",
+    "ADMIN_ORIGIN": "https://thichmacdep.com.vn",
   },
   "d1_databases": [
     {
