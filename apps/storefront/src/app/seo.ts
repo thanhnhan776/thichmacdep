@@ -18,6 +18,15 @@ function configuredOrigin(value: unknown): string | null {
   } catch { return null; }
 }
 
+function imageUrl(value: string, origin: string | null): string | null {
+  if (!value || value !== value.trim()) return null;
+  if (value.startsWith('/') && (!origin || /^\/[\/\\]/.test(value))) return null;
+  try {
+    const url = new URL(value, origin ?? undefined);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password ? url.href : null;
+  } catch { return null; }
+}
+
 @Injectable()
 export class SeoTitleStrategy extends TitleStrategy {
   private readonly document = inject(DOCUMENT);
@@ -73,6 +82,17 @@ export class SeoTitleStrategy extends TitleStrategy {
     this.meta.updateTag({ property: 'og:title', content: title });
     this.meta.updateTag({ property: 'og:description', content: description });
     this.meta.updateTag({ property: 'og:type', content: detail?.status === 'success' && !shellError ? 'product' : 'website' });
+    const images = detail?.status === 'success' && !shellError ? [...detail.product.images].sort((a, b) => a.position - b.position) : [];
+    const image = images.map(item => imageUrl(item.url, this.origin)).find(Boolean) ?? imageUrl('/tmd-logo-cropped.png', this.origin);
+    this.meta.updateTag({ name: 'twitter:card', content: image ? 'summary_large_image' : 'summary' });
+    this.meta.updateTag({ name: 'twitter:title', content: title });
+    this.meta.updateTag({ name: 'twitter:description', content: description });
+    this.meta.removeTag('property="og:image"');
+    this.meta.removeTag('name="twitter:image"');
+    if (image) {
+      this.meta.updateTag({ property: 'og:image', content: image });
+      this.meta.updateTag({ name: 'twitter:image', content: image });
+    }
     const canonical = index && path && this.origin ? `${this.origin}${path}` : null;
     this.document.head.querySelectorAll('link[rel="canonical"]').forEach(link => link.remove());
     this.meta.removeTag('property="og:url"');

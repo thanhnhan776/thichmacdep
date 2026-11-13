@@ -144,9 +144,17 @@ describe('product detail page', () => {
     expect(element.querySelector('a[href="https://ig.me/m/thich_mac_dep_vn"]')?.getAttribute('rel')).toBe('noopener noreferrer');
     expect(element.querySelector('a[href="https://www.tiktok.com/@thich_mac_dep_vn"]')?.getAttribute('target')).toBe('_blank');
     expect(element.querySelector('.buy-label')?.textContent).toContain('Tiếp tục mua hàng qua');
-    expect(element.querySelectorAll('.chat-actions svg[aria-hidden="true"]').length).toBe(2);
+    const chatLinks = Array.from(element.querySelectorAll<HTMLAnchorElement>('.chat-actions a'));
+    expect(chatLinks.map(link => link.textContent?.trim())).toEqual(['Messenger', 'Instagram', 'TikTok']);
+    const messenger = () => new URL(chatLinks[0].href);
+    expect(messenger().origin + messenger().pathname).toBe('https://m.me/thichmacdep3007');
+    expect(messenger().searchParams.get('text')).toBe(fixture.componentInstance.inquiryText());
+    expect(chatLinks[0].getAttribute('target')).toBe('_blank');
+    expect(chatLinks[0].getAttribute('rel')).toBe('noopener noreferrer');
+    expect(element.querySelectorAll('.chat-actions svg[aria-hidden="true"]').length).toBe(3);
     fixture.componentInstance.selectedVariant.set('v');
     fixture.detectChanges();
+    expect(messenger().searchParams.get('text')).toContain('Synthetic variant (V-1)');
     expect(element.textContent).toContain('150.000');
     element.querySelector('.frame img')?.dispatchEvent(new Event('error'));
     fixture.detectChanges();

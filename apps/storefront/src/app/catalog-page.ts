@@ -9,6 +9,16 @@ export type CatalogPageData =
   | { status: 'success'; categories: Category[]; category: Category | null; query: ProductQuery; products: ProductPage }
   | { status: 'invalid' | 'not-found' | 'error' };
 
+const CATEGORY_ORDER = ['Áo khoác', 'Quần dài', 'Áo kiểu', 'Sơ mi', 'Áo dài', 'Chân váy', 'Khác'];
+
+function sortCategories(categories: Category[]): Category[] {
+  const rank = (category: Category) => {
+    const index = CATEGORY_ORDER.indexOf(category.name);
+    return index === -1 ? CATEGORY_ORDER.length : index;
+  };
+  return [...categories].sort((a, b) => rank(a) - rank(b));
+}
+
 // Wire as resolve: { catalog: resolveCatalogPage }, with
 // runGuardsAndResolvers: 'paramsOrQueryParamsChange'. Optional category routes
 // may use :categorySlug; the query-string form is shared with the shell.
@@ -42,7 +52,7 @@ export const resolveCatalogPage: ResolveFn<CatalogPageData> = async route => {
     const selected = category === undefined ? null : categories.find(item => item.slug === category);
     if (selected === undefined) return fail('not-found', 404);
     const products = await api.products(query);
-    return { status: 'success', categories, category: selected, query, products };
+    return { status: 'success', categories: sortCategories(categories), category: selected, query, products };
   } catch {
     return fail('error', 500);
   }

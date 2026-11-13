@@ -23,7 +23,7 @@
         </label>
         <label>{{ language.current() === 'vi' ? 'Sắp xếp' : 'Sort by' }}
           <select [value]="data.query.sort || 'newest'" (change)="updateControls(data.query.pageSize!, $any($event.target).value)">
-            <option value="newest">{{ language.current() === 'vi' ? 'Mới nhất' : 'Newest' }}</option><option value="price-asc">{{ language.current() === 'vi' ? 'Giá tăng dần' : 'Price: low to high' }}</option><option value="price-desc">{{ language.current() === 'vi' ? 'Giá giảm dần' : 'Price: high to low' }}</option><option value="name-asc">Name A–Z</option><option value="name-desc">Name Z–A</option>
+            <option value="newest">{{ language.current() === 'vi' ? 'Mới nhất' : 'Newest' }}</option><option value="price-asc">{{ language.current() === 'vi' ? 'Giá tăng dần' : 'Price: low to high' }}</option><option value="price-desc">{{ language.current() === 'vi' ? 'Giá giảm dần' : 'Price: high to low' }}</option><option value="name-asc">{{ language.current() === 'vi' ? 'Tên A–Z' : 'Name A–Z' }}</option><option value="name-desc">{{ language.current() === 'vi' ? 'Tên Z–A' : 'Name Z–A' }}</option>
           </select>
         </label>
       </div>

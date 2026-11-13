@@ -25,6 +25,14 @@ describe('catalog page resolver', () => {
     expect(result.status).toBe('success');
     expect(api.products).toHaveBeenCalledWith({ keyword: 'dress', category: 'synthetic', page: 2, pageSize: 12, sort: 'newest' });
   });
+  it('orders category filters while preserving the order of unlisted categories', async () => {
+    const names = ['Extra B', 'Khác', 'Áo dài', 'Sơ mi', 'Chân váy', 'Áo kiểu', 'Quần dài', 'Extra A', 'Áo khoác'];
+    const categories = names.map((name, index) => ({ id: String(index), name, slug: String(index), parentId: null }));
+    api.categories.mockResolvedValueOnce(categories);
+    const result = await resolve();
+    expect(result.status === 'success' && result.categories.map(item => item.name)).toEqual(['Áo khoác', 'Quần dài', 'Áo kiểu', 'Sơ mi', 'Áo dài', 'Chân váy', 'Khác', 'Extra B', 'Extra A']);
+    expect(categories.map(item => item.name)).toEqual(names);
+  });
   it('rejects invalid and repeated parameters with 400', async () => {
     expect((await resolve({ page: ['1', '2'] })).status).toBe('invalid');
     expect(response.status).toBe(400);
@@ -49,6 +57,19 @@ describe('catalog page resolver', () => {
 });
 
 describe('catalog page', () => {
+  it('translates name sorting options when the language changes', () => {
+    const catalog: CatalogPageData = { status: 'success', categories: [], category: null, query: { page: 1, pageSize: 12 }, products: { items: [], page: 1, pageSize: 12, total: 0 } };
+    const data = new BehaviorSubject({ catalog });
+    TestBed.configureTestingModule({ imports: [CatalogPage], providers: [provideRouter([]), { provide: ActivatedRoute, useValue: { data, snapshot: { data: data.value } } }] });
+    const fixture = TestBed.createComponent(CatalogPage);
+    fixture.componentInstance.language.current.set('vi');
+    fixture.detectChanges();
+    const labels = () => Array.from(fixture.nativeElement.querySelectorAll('option[value^="name-"]') as NodeListOf<HTMLOptionElement>).map(option => option.textContent?.trim());
+    expect(labels()).toEqual(['Tên A–Z', 'Tên Z–A']);
+    fixture.componentInstance.language.current.set('en');
+    fixture.detectChanges();
+    expect(labels()).toEqual(['Name A–Z', 'Name Z–A']);
+  });
   it('renders products, category links, accurate counts and URL-backed pagination', () => {
     const catalog: CatalogPageData = { status: 'success', categories: [category], category, query: { page: 1, pageSize: 12, category: category.slug }, products: { items: [product], page: 1, pageSize: 12, total: 13 } };
     const data = new BehaviorSubject({ catalog });

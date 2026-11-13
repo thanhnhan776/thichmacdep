@@ -128,12 +128,22 @@ export class ProductDetail {
 
   imageFailed(url: string): void { this.failedImages.update(images => [...images, url]); }
 
+  inquiryText(): string {
+    const product = this.product();
+    if (!product) return '';
+    const variant = this.variant();
+    const introduction = this.language.current() === 'vi' ? 'Xin chào, tôi quan tâm đến sản phẩm' : "Hello, I'm interested in";
+    return `${introduction} ${product.name}${variant ? ` — ${variantLabel(variant)}${variant.sku ? ` (${variant.sku})` : ''}` : ''}. ${typeof location === 'undefined' ? '' : location.href}`.trim();
+  }
+
+  messengerUrl(): string {
+    return `https://m.me/thichmacdep3007?text=${encodeURIComponent(this.inquiryText())}`;
+  }
+
   async copyInquiry(): Promise<void> {
     const product = this.product();
     if (!product) return;
-    const variant = this.variant();
-    const introduction = this.language.current() === 'vi' ? 'Xin chào, tôi quan tâm đến sản phẩm' : "Hello, I'm interested in";
-    const text = `${introduction} ${product.name}${variant ? ` — ${variantLabel(variant)}${variant.sku ? ` (${variant.sku})` : ''}` : ''}. ${typeof location === 'undefined' ? '' : location.href}`.trim();
+    const text = this.inquiryText();
     try {
       await navigator.clipboard.writeText(text);
       if (this.identity() === product.id) this.copyStatus.set(this.language.text().copied);

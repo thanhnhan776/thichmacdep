@@ -112,4 +112,18 @@ describe('storefront routing', () => {
     expect(document.title).not.toContain('Linen');
     expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toContain('noindex');
   });
+
+  it('updates social preview images for products and falls back on navigation', async () => {
+    TestBed.configureTestingModule({ providers: [{ provide: TitleStrategy, useClass: SeoTitleStrategy }] });
+    TestBed.inject(TransferState).set(makeStateKey<string | null>('seo-site-origin'), 'https://shop.example');
+    api.product.mockResolvedValue({ id: 'p', sku: null, slug: 'item', name: 'Item', shortDescription: null, description: null, brandName: null, priceMinor: null, currency: 'VND', website: { seoTitle: null, seoDescription: null, marketingDescription: null, isFeatured: false, displayOrder: 0 }, images: [{ id: '2', url: 'https://cdn.example/later.png', altText: null, position: 2 }, { id: '1', url: '/images/item.png', altText: null, position: 1 }], variants: [], categories: [] });
+    const document = TestBed.inject(DOCUMENT);
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/products/item');
+    expect(document.head.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe('https://shop.example/images/item.png');
+    expect(document.head.querySelector('meta[name="twitter:image"]')?.getAttribute('content')).toBe('https://shop.example/images/item.png');
+    expect(document.head.querySelector('meta[name="twitter:card"]')?.getAttribute('content')).toBe('summary_large_image');
+    await harness.navigateByUrl('/');
+    expect(document.head.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe('https://shop.example/tmd-logo-cropped.png');
+  });
 });
