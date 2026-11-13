@@ -31,7 +31,13 @@
             "server": "src/main.server.ts",
             "outputMode": "server",
             "security": {
-              "allowedHosts": ["127.0.0.1", "localhost", "thichmacdep.nhanttdev.workers.dev"]
+              "allowedHosts": [
+                "127.0.0.1",
+                "localhost",
+                "thichmacdep.nhanttdev.workers.dev",
+                "thichmacdep.com.vn",
+                "www.thichmacdep.com.vn"
+              ]
             },
             "ssr": {
               "entry": "src/server.ts"
