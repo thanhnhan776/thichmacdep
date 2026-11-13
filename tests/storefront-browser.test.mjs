@@ -128,7 +128,7 @@ test('local SSR catalog hydrates and works in offline Chrome', { timeout: 180000
       if (worker.child.exitCode !== null || worker.child.signalCode !== null) throw new Error(`Worker exited: ${worker.output()}`);
       return /ready on/i.test(worker.output());
     }, 'Worker', 45000);
-    for (const [path, heading] of [['/products', 'All products'], ['/products/linen-shirt', 'Linen Shirt']]) {
+    for (const [path, heading] of [['/products', 'Tất cả sản phẩm'], ['/products/linen-shirt', 'Linen Shirt']]) {
       const response = await fetch(base + path, { signal: AbortSignal.timeout(10000) });
       assert.equal(response.status, 200);
       assert.match(await response.text(), new RegExp(`<h1[^>]*>${heading}</h1>`));
@@ -170,7 +170,7 @@ test('local SSR catalog hydrates and works in offline Chrome', { timeout: 180000
       assert.equal(await cdp.evaluate('document.documentElement.scrollWidth <= innerWidth && document.body.scrollWidth <= innerWidth'), true, `horizontal overflow at ${width}px`);
     };
     await navigate('/products');
-    await wait("document.querySelector('app-product-card h3')?.textContent.includes('Linen Shirt')", 'listing');
+    await wait("[...document.querySelectorAll('app-product-card h3')].some(h => h.textContent.includes('Linen Shirt'))", 'listing');
     await wait("document.querySelector('app-product-card .image-fallback')", 'offline listing image fallback');
     await viewport(375);
     await viewport(1440);
@@ -183,11 +183,11 @@ test('local SSR catalog hydrates and works in offline Chrome', { timeout: 180000
     await wait("location.pathname === '/products/linen-shirt' && document.querySelector('app-product-detail h1')?.textContent === 'Linen Shirt'", 'client navigation');
     // Also load detail directly so this page's server HTML is hydrated independently.
     await navigate('/products/linen-shirt');
-    await wait("document.querySelector('app-product-detail .placeholder')?.textContent.includes('Image unavailable')", 'offline detail image fallback');
+    await wait("document.querySelector('app-product-detail .placeholder')?.textContent.includes('Không có hình ảnh')", 'offline detail image fallback');
     await viewport(375);
     await viewport(1440);
-    await cdp.evaluate("[...document.querySelectorAll('.variants button')].find(b => b.textContent.trim() === 'Medium').click()");
-    await wait("[...document.querySelectorAll('.variants button')].find(b => b.textContent.trim() === 'Medium')?.getAttribute('aria-pressed') === 'true'", 'hydrated detail variant');
+    await cdp.evaluate("[...document.querySelectorAll('.variants button')].find(b => b.textContent.trim() === 'size: M').click()");
+    await wait("[...document.querySelectorAll('.variants button')].find(b => b.textContent.trim() === 'size: M')?.getAttribute('aria-pressed') === 'true'", 'hydrated detail variant');
     assert.ok(blocked.some(url => url.includes('synthetic-browser.jpg')), 'synthetic external image was blocked');
     assert.deepEqual(errors.filter(error => /hydrat|NG05\d\d/i.test(error)), [], `hydration errors: ${errors.join('\n')}`);
   } finally {

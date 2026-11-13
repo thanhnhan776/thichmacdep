@@ -4,7 +4,7 @@ This workspace contains a catalog API, local D1/R2 bindings and an Angular SSR s
 
 **Phase 2 is complete locally, not production-ready.** The owner configured Google sign-in, imported the workbook through admin and confirmed reimport works. The workbook contained 183 goods, 2 services and 73 product groups. Edge rate limits, deployed same-origin routing and production OAuth configuration remain outstanding. See the [import contract](docs/xlsx-import-contract.md) and [project plan](ThichMacDep_AI_AGENT_PROJECT_PLAN.md).
 
-**Phase 3 is in progress, not complete.** The local Workers storefront uses the local catalog API and D1 state; it is not a production deployment.
+**Phase 3 is complete locally with caveats.** The owner accepted the storefront and the local regression suite passed, including synthetic import-to-SSR and Chrome hydration/responsive/keyboard smoke tests. This is not a production deployment or an exhaustive accessibility audit; fresh-clone verification and production routing, HTTPS, OAuth, edge rate limits and operational controls remain outstanding. See the [project plan](ThichMacDep_AI_AGENT_PROJECT_PLAN.md).
 
 ## Fresh local setup
 

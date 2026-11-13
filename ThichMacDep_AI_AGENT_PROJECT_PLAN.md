@@ -133,9 +133,11 @@ Manual goods-only XLSX preview and confirmed import, grouping, direct image URLs
 
 **Local verification:** The owner configured Google OAuth, signed in, imported the actual workbook through admin and confirmed the reimport works. Synthetic tests cover replay, grouping and settings preservation; local generated slugs were migrated to readable names with a backup. **Production blockers:** edge rate limits, deployed storefront/API same-origin routing and production Google OAuth configuration. The XLSX lock serializes cooperating XLSX writers, not concurrent non-XLSX catalog writers; do not run production multi-writer workloads until all writers are coordinated or equivalent database constraints exist. No KiotViet credentials, webhook, cron, R2 or cloud resources are required for local tests; no production resources have been created.
 
-### Phase 3 — Storefront and SEO: pending
+### Phase 3 — Storefront and SEO: complete locally with caveats
 
 Implement Section 8, including direct-image failure fallback and accurate SSR metadata. Acceptance requires meaningful server-rendered content, tested responsive/accessibility behavior and imported updates visible without rebuilding, subject to documented cache TTL.
+
+**Local verification (2026-11-13):** The owner accepted the local storefront. API typecheck, API and import/sync tests, storefront unit and SSR/SEO tests, proxy and catalog integration tests, synthetic admin import/reimport-to-SSR, XLSX tests, and the local Chrome hydration/responsive/keyboard smoke test passed. Browser testing is a focused smoke test, not an exhaustive accessibility audit. Local SSR reflects catalog updates without a rebuild; public API responses may be cached for up to 60 seconds. Direct image hosting can fail or expire, so independent backups remain necessary. Fresh-clone setup and production deployment, routing, HTTPS, OAuth, edge rate limits and operational controls remain unverified; Phase 4 requires separate approval.
 
 ### Phase 4 — Deployment: deferred, human approval required
 

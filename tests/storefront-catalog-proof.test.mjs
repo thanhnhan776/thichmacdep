@@ -79,7 +79,7 @@ test('isolated multiworker D1 data reaches dynamic raw SSR HTML', { timeout: 180
     };
     for (const path of ['/', '/products']) {
       const html = await page(path);
-      assert.match(html, /<h1[^>]*>All products<\/h1>/);
+      assert.match(html, /<h1[^>]*>Tất cả sản phẩm<\/h1>/);
       assert.match(html, /Linen Shirt/);
       assert.match(html, /Cotton Tee/);
       assert.match(html, /Tops/);
@@ -109,8 +109,8 @@ test('isolated multiworker D1 data reaches dynamic raw SSR HTML', { timeout: 180
     assert.match(filtered, /<meta[^>]*name="robots"[^>]*content="noindex, follow"/);
     assert.doesNotMatch(filtered, /rel="canonical"/);
     const secondPage = await page('/products?page=2');
-    assert.match(secondPage, /Page 2/);
-    assert.match(secondPage, /No products on this page/);
+    assert.match(secondPage, /Trang 2/);
+    assert.match(secondPage, /Không có sản phẩm trên trang này/);
     assert.doesNotMatch(secondPage, /Linen Shirt|Cotton Tee|Wide Trousers/);
     for (const path of ['/categories/no-such-category', '/products/no-such-product', '/products/hidden-bag', '/products/inactive-hat']) {
       assert.equal((await get(path)).status, 404, path);
