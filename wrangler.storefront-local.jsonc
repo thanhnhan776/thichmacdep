@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "thichmacdep-api-local",
+  "main": "apps/api/src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "vars": {
+    "IMAGE_PUBLIC_BASE_URL": "http://localhost:4200/api/images/",
+    "IMAGE_ALLOW_LOCAL": "true",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "thichmacdep-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "drizzle/migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "thichmacdep-local",
+    },
+  ],
+}

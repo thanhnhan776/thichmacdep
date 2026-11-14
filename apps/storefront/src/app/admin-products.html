@@ -1,0 +1,190 @@
+@if (mode === 'list') {
+@if (trendingView()) {
+<section class="card trending-list" aria-labelledby="trending-title">
+  <h2 id="trending-title">Sắp xếp sản phẩm nổi bật</h2>
+  <button type="button" class="secondary" (click)="trendingView.set(false); refresh()" [disabled]="trendingBusy()">← Danh sách sản phẩm</button>
+  <p>Kéo thả hoặc dùng nút lên xuống để thay đổi thứ tự. Thay đổi được lưu tự động.</p>
+  @if (trendingBusy()) { <p role="status">Đang tải hoặc lưu thứ tự…</p> }
+  @if (trendingError()) { <p class="error" role="alert">{{ trendingError() }} <button type="button" class="secondary" (click)="refreshTrending()" [disabled]="trendingBusy()">Tải lại</button></p> }
+  @if (trendingMessage()) { <p role="status">{{ trendingMessage() }}</p> }
+  @if (trendingLoaded() && !trendingError()) {
+    @if (trendingProducts().length) {
+      <ol>
+        @for (product of trendingProducts(); track product.id; let index = $index) {
+          <li class="trending-row" [draggable]="!trendingBusy() && !!trendingVersion()" (click)="openRow(product, $event)" (dragstart)="startTrendingDrag(index, $event)" (dragend)="endTrendingDrag()" (dragover)="$event.preventDefault()" (drop)="dropTrending(index, $event)">
+            <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+            @if (product.imageUrl) { <img class="thumbnail" [src]="product.imageUrl" alt="" loading="lazy"> }
+            @else { <span class="thumbnail placeholder" aria-label="Không có ảnh">—</span> }
+            <span class="trending-name"><a [href]="'/admin/products/' + encodeId(product.id) + '/edit'" [attr.aria-label]="'Sửa ' + product.name">{{ product.name }}</a> <small>({{ product.slug }})</small></span>
+            <div class="sort-actions" [class.expanded]="expandedActions().has('trending:' + product.id)" (click)="$event.stopPropagation()" (keydown.escape)="closeActions('trending:' + product.id, trendingToggle, $event)">
+            <button #trendingToggle type="button" class="secondary sort-actions-toggle" (click)="toggleActions('trending:' + product.id)" [attr.aria-expanded]="expandedActions().has('trending:' + product.id)" [attr.aria-label]="'Thao tác cho ' + product.name">⋯</button>
+            <div class="sort-actions-buttons">
+            <button type="button" class="secondary icon-button" (click)="reorderTrending(index, 0)" [disabled]="trendingBusy() || index === 0 || !trendingVersion()" [attr.aria-label]="'Đưa ' + product.name + ' lên đầu'" title="Đưa lên đầu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14M12 20V8m-5 5 5-5 5 5"/></svg></button>
+            <button type="button" class="secondary icon-button" (click)="reorderTrending(index, index - 1)" [disabled]="trendingBusy() || index === 0 || !trendingVersion()" [attr.aria-label]="'Đưa ' + product.name + ' lên'" title="Đưa lên">↑</button>
+            <button type="button" class="secondary icon-button" (click)="reorderTrending(index, index + 1)" [disabled]="trendingBusy() || index === trendingProducts().length - 1 || !trendingVersion()" [attr.aria-label]="'Đưa ' + product.name + ' xuống'" title="Đưa xuống">↓</button>
+            <button type="button" class="secondary icon-button" (click)="reorderTrending(index, trendingProducts().length - 1)" [disabled]="trendingBusy() || index === trendingProducts().length - 1 || !trendingVersion()" [attr.aria-label]="'Đưa ' + product.name + ' xuống cuối'" title="Đưa xuống cuối"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14M12 4v12m-5-5 5 5 5-5"/></svg></button>
+            <button type="button" class="secondary icon-button danger trending-remove" (click)="removeTrending(product)" [disabled]="trendingBusy() || !trendingVersion()" [attr.aria-label]="'Bỏ ' + product.name + ' khỏi nổi bật'" title="Bỏ khỏi nổi bật"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
+            </div></div>
+          </li>
+        }
+      </ol>
+    } @else if (!trendingBusy()) { <p role="status">Chưa có sản phẩm nổi bật.</p> }
+  }
+</section>
+} @else {
+<section class="card listing" aria-labelledby="products-title">
+  <div class="listing-header">
+    <div><p class="eyebrow">DANH MỤC</p><h2 id="products-title">Sản phẩm</h2><p class="subtitle">Quản lý sản phẩm tại một nơi.</p></div>
+    <a class="primary-action" href="/admin/products/new"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Thêm sản phẩm</a>
+  </div>
+  @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+  @if (message()) { <p role="status">{{ message() }}</p> }
+  <form class="filters" (ngSubmit)="applyFilters()">
+    <div class="search-field"><label for="product-search">Tìm kiếm</label><input id="product-search" name="search" type="search" maxlength="200" placeholder="Tìm tên hoặc SKU" [(ngModel)]="filters.search"></div>
+    <div><label for="product-status">Trạng thái</label><select id="product-status" name="status" [(ngModel)]="filters.status"><option value="">Tất cả trạng thái</option><option value="active">Đang bán</option><option value="inactive">Ngừng bán</option></select></div>
+    <div><label for="product-trending">Nổi bật</label><select id="product-trending" name="trending" [(ngModel)]="filters.trending"><option value="">Tất cả sản phẩm</option><option value="true">Nổi bật</option><option value="false">Không nổi bật</option></select></div>
+    <div><label for="product-category">Danh mục</label><select id="product-category" name="category" [(ngModel)]="filters.category"><option value="">Tất cả danh mục</option>@for (category of categories(); track category.id) { <option [value]="category.slug">{{ category.name }}</option> }</select>@if (categoriesError()) { <p class="error" role="alert">Không thể tải danh mục. <button type="button" class="secondary" (click)="loadCategories()">Thử lại</button></p> }</div>
+    <div class="filter-actions">
+      <button type="submit" class="secondary" [disabled]="busy()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></svg> Áp dụng</button>
+      <button type="button" class="secondary" (click)="clearFilters()" [disabled]="busy()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg> Xóa bộ lọc</button>
+    </div>
+    <div class="trending-action">
+      <button type="button" class="secondary" (click)="showTrending()" [disabled]="busy()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"/></svg> Sửa sản phẩm nổi bật</button>
+    </div>
+  </form>
+  @if (busy()) { <p class="list-state" role="status">Đang tải hoặc cập nhật sản phẩm…</p> }
+  @if (listError()) { <p class="list-state">Không thể tải sản phẩm. <button type="button" class="secondary" (click)="refresh()" [disabled]="busy()">Thử lại</button></p> }
+  @if (listLoaded() && !listError() && !busy()) {
+    @if (products().length) {
+      <div class="table-scroll" role="region" aria-label="Bảng sản phẩm" tabindex="0">
+        <table>
+          <thead><tr><th scope="col">Sản phẩm</th><th scope="col">SKU</th><th scope="col">Giá</th><th scope="col">Trạng thái</th><th scope="col">Nổi bật</th><th scope="col">Thao tác</th></tr></thead>
+          <tbody>
+            @for (product of products(); track product.id) {
+              <tr (click)="openRow(product, $event)">
+                <th scope="row"><div class="product-cell">
+                  @if (product.imageUrl) { <img class="thumbnail" [src]="product.imageUrl" alt="" loading="lazy"> }
+                  @else { <span class="thumbnail placeholder" aria-label="Không có ảnh">—</span> }
+                  <span><strong>{{ product.name }}</strong><small>{{ product.brandName || product.slug }}</small></span>
+                </div></th>
+                <td>{{ product.sku || '—' }}</td><td class="price">{{ formatPrice(product) }}</td>
+                <td><span class="badge" [class.active]="product.isActive">{{ product.isActive ? 'Đang bán' : 'Ngừng bán' }}</span></td>
+                <td>{{ product.isTrending ? 'Nổi bật (' + product.trendingSortOrder + ')' : '—' }}</td>
+                <td class="actions"><a class="edit-action" [href]="'/admin/products/' + encodeId(product.id) + '/edit'" [attr.aria-label]="'Sửa ' + product.name"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16zM14 7l3 3"/></svg> Sửa</a><button type="button" class="secondary danger" (click)="removeProduct(product)" [disabled]="busy()" [attr.aria-label]="'Xóa ' + product.name"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg> Xóa</button></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else { <p class="list-state" role="status">Không tìm thấy sản phẩm. Hãy thay đổi bộ lọc hoặc thêm sản phẩm.</p> }
+    <div class="pagination">
+      <p aria-live="polite">Hiển thị {{ total() ? offset() + 1 : 0 }}–{{ offset() + products().length }} trong {{ total() }} sản phẩm</p>
+      <nav aria-label="Trang sản phẩm"><button type="button" class="secondary" (click)="changePage(offset() - pageSize)" [disabled]="busy() || offset() === 0">Trước</button><button type="button" class="secondary" (click)="changePage(offset() + pageSize)" [disabled]="busy() || offset() + pageSize >= total()">Tiếp</button></nav>
+    </div>
+  }
+</section>
+}
+} @else {
+<p><a class="edit-action" href="/admin/products">← Về danh sách sản phẩm</a></p>
+@if (busy() && !editorLoaded()) { <p role="status">Đang tải sản phẩm…</p> }
+@if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+@if (message()) { <p role="status">{{ message() }}</p> }
+@if (!editorLoaded() && !busy() && productId) { <button type="button" class="secondary" (click)="loadEditor()">Thử lại</button> }
+@if (editorLoaded()) {
+<section class="card" aria-labelledby="editor-title">
+  <h2 id="editor-title">{{ editingId() ? 'Sửa sản phẩm' : 'Thêm sản phẩm' }}</h2>
+  @if (xlsxOwned()) { <p>SKU, tên, thương hiệu, giá, tiền tệ và trạng thái được quản lý bằng XLSX. Hãy sửa bảng tính và nhập lại. Bạn có thể sửa mô tả, thiết lập nổi bật và hiển thị trên website tại đây.</p> }
+  <form (ngSubmit)="save()" #productForm="ngForm">
+    <fieldset [disabled]="busy()">
+    <label for="product-name">Tên sản phẩm</label><input id="product-name" name="name" required maxlength="200" [disabled]="xlsxOwned()" [(ngModel)]="draft.name">
+    <label for="product-slug">Slug</label><input id="product-slug" name="slug" required maxlength="200" pattern="[a-z0-9]+(-[a-z0-9]+)*" [(ngModel)]="draft.slug">
+    <label for="product-sku">SKU</label><input id="product-sku" name="sku" maxlength="200" [disabled]="xlsxOwned()" [(ngModel)]="draft.sku">
+    <label for="product-brand">Thương hiệu</label><input id="product-brand" name="brand" maxlength="200" [disabled]="xlsxOwned()" [(ngModel)]="draft.brandName">
+    <label for="product-description">Mô tả</label><textarea id="product-description" name="description" maxlength="20000" rows="5" [(ngModel)]="draft.description"></textarea>
+    <label for="product-price">Giá theo đơn vị tiền nhỏ nhất (không bắt buộc)</label><input id="product-price" name="price" type="text" inputmode="numeric" [disabled]="xlsxOwned()" [value]="priceText" #price (input)="updatePrice(price)" [attr.aria-invalid]="priceInvalid">
+    @if (priceInvalid) { <p class="error">Giá phải là số nguyên không âm trong phạm vi cho phép.</p> }
+    <label for="product-currency">Tiền tệ (ba chữ cái viết hoa)</label><input id="product-currency" name="currency" required pattern="[A-Z]{3}" maxlength="3" [disabled]="xlsxOwned()" [(ngModel)]="draft.currency">
+    <label class="check"><input name="active" type="checkbox" [disabled]="xlsxOwned()" [(ngModel)]="draft.isActive"> Đang bán</label>
+    <div class="trending-fields"><label class="check"><input name="trending" type="checkbox" [(ngModel)]="draft.isTrending"> Nổi bật</label></div>
+    <button type="submit" [disabled]="busy() || productForm.invalid || priceInvalid">Lưu sản phẩm</button>
+    </fieldset>
+  </form>
+</section>
+@if (editingId()) {
+<section class="card" aria-labelledby="visibility-title">
+  <h2 id="visibility-title">Hiển thị trên website</h2>
+  <p id="visibility-hint">Sản phẩm chỉ hiển thị trên website khi ở trạng thái Đang bán và không bị ẩn tại đây. Thiết lập này không thay đổi trạng thái bán.</p>
+  <label class="check"><input name="hidden" type="checkbox" [(ngModel)]="isHidden" [disabled]="busy()" aria-describedby="visibility-hint"> Ẩn trên website</label>
+  <button type="button" (click)="saveVisibility()" [disabled]="busy()">Lưu hiển thị</button>
+</section>
+} @else {
+<p>Sản phẩm mới mặc định không bị ẩn trên website. Sau khi tạo, bạn có thể chỉnh thiết lập hiển thị trong trang sửa sản phẩm.</p>
+}
+@if (editingId()) {
+  <section class="card" aria-labelledby="images-title">
+    <h2 id="images-title">Ảnh sản phẩm</h2>
+    <label class="upload-label" for="product-image">Chọn ảnh để tải lên</label>
+    <input class="upload-input" id="product-image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" (change)="upload($event)" [disabled]="busy()" aria-describedby="upload-hint">
+    <p id="upload-hint">JPEG, PNG, WebP hoặc GIF, tối đa 5 MiB. Kéo thả hoặc dùng nút mũi tên để sắp xếp.</p>
+    <ol>
+      @for (image of images(); track image.id; let index = $index) {
+        <li class="image-row" [draggable]="!busy()" (dragstart)="startImageDrag(index, false, $event)" (dragend)="endImageDrag()" (dragover)="$event.preventDefault()" (drop)="dropImage(index, false, $event)"><span class="drag-handle" aria-hidden="true">⋮⋮</span><button type="button" class="preview-button" (click)="openPreview(preview, image.url, previewImage)" [attr.aria-label]="'Xem lớn ảnh ' + (index + 1)"><img [src]="image.url" alt=""></button><span>Ảnh {{ index + 1 }}</span>
+          <div class="sort-actions" [class.expanded]="expandedActions().has('image:' + image.id)" (click)="$event.stopPropagation()" (keydown.escape)="closeActions('image:' + image.id, imageToggle, $event)">
+          <button #imageToggle type="button" class="secondary sort-actions-toggle" (click)="toggleActions('image:' + image.id)" [attr.aria-expanded]="expandedActions().has('image:' + image.id)" [attr.aria-label]="'Thao tác cho ảnh ' + (index + 1)">⋯</button>
+          <div class="sort-actions-buttons">
+          <button type="button" class="secondary icon-button" (click)="reorderImages(index, 0)" [disabled]="busy() || index === 0" [attr.aria-label]="'Đưa ảnh ' + (index + 1) + ' lên đầu'" title="Đưa lên đầu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14M12 20V8m-5 5 5-5 5 5"/></svg></button>
+          <button type="button" class="secondary icon-button" (click)="moveImage(index, -1)" [disabled]="busy() || index === 0" [attr.aria-label]="'Đưa ảnh ' + (index + 1) + ' lên'">↑</button>
+          <button type="button" class="secondary icon-button" (click)="moveImage(index, 1)" [disabled]="busy() || index === images().length - 1" [attr.aria-label]="'Đưa ảnh ' + (index + 1) + ' xuống'">↓</button>
+          <button type="button" class="secondary icon-button" (click)="reorderImages(index, images().length - 1)" [disabled]="busy() || index === images().length - 1" [attr.aria-label]="'Đưa ảnh ' + (index + 1) + ' xuống cuối'" title="Đưa xuống cuối"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14M12 4v12m-5-5 5 5 5-5"/></svg></button>
+          <button type="button" class="secondary icon-button danger" (click)="removeImage(image)" [disabled]="busy()" [attr.aria-label]="'Xóa ảnh ' + (index + 1)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
+          </div></div>
+        </li>
+      } @empty { <li>Chưa có ảnh.</li> }
+    </ol>
+  </section>
+  <section class="card" aria-labelledby="variant-images-title">
+    <h2 id="variant-images-title">Biến thể</h2>
+    <label for="variant">Chọn biến thể</label>
+    <select id="variant" #variant [value]="selectedVariant()" (change)="selectVariant(variant.value)" [disabled]="busy()">
+      <option value="">Chọn biến thể</option>
+      @for (item of variants(); track item.id) { <option [value]="item.id">{{ item.name }}{{ item.sku ? ' (' + item.sku + ')' : '' }}</option> }
+    </select>
+    @if (!variants().length) { <p>Sản phẩm chưa có biến thể.</p> }
+    @if (selectedVariant()) {
+      <label for="variant-description">Mô tả biến thể</label><textarea id="variant-description" maxlength="20000" rows="4" [(ngModel)]="variantDescription" [disabled]="busy()"></textarea>
+      <button type="button" (click)="saveVariantDescription()" [disabled]="busy()">Lưu mô tả biến thể</button>
+      <p>Chọn ảnh sản phẩm cho biến thể. Nếu không chọn, cửa hàng sẽ dùng ảnh sản phẩm.</p>
+      <label class="upload-label" for="variant-image">Tải ảnh lên cho biến thể</label>
+      <input class="upload-input" id="variant-image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" (change)="uploadVariant($event)" [disabled]="busy() || variantImagesState() !== 'ready'" aria-describedby="variant-upload-hint">
+      <p id="variant-upload-hint">Ảnh cũng được thêm vào thư viện ảnh sản phẩm. JPEG, PNG, WebP hoặc GIF, tối đa 5 MiB.</p>
+      @if (variantImagesState() === 'loading') { <p>Đang tải ảnh biến thể...</p> }
+      @if (variantImagesState() === 'error') {
+        <p role="alert">Không thể tải ảnh biến thể. Vui lòng thử lại trước khi chỉnh sửa.</p>
+        <button type="button" (click)="selectVariant(selectedVariant())" [disabled]="busy()">Thử lại</button>
+      }
+      @if (variantImagesState() === 'ready') {
+      @for (image of images(); track image.id; let index = $index) {
+        <label class="check"><input type="checkbox" [checked]="selectedImages().includes(image.id)" [disabled]="busy()" #selection (change)="toggleVariantImage(image.id, selection.checked, selection)"> Ảnh {{ index + 1 }} <img [src]="image.url" alt=""></label>
+      }
+      <h3>Thứ tự ảnh đã chọn</h3><p>Kéo thả hoặc dùng nút mũi tên để sắp xếp.</p>
+      <ol>
+        @for (imageId of selectedImages(); track imageId; let index = $index) {
+          <li class="image-row" [draggable]="!busy()" (dragstart)="startImageDrag(index, true, $event)" (dragend)="endImageDrag()" (dragover)="$event.preventDefault()" (drop)="dropImage(index, true, $event)"><span class="drag-handle" aria-hidden="true">⋮⋮</span><button type="button" class="preview-button" (click)="openPreview(preview, imageUrl(imageId), previewImage)" [attr.aria-label]="'Xem lớn ảnh đã chọn ' + (index + 1)"><img [src]="imageUrl(imageId)" alt=""></button><span>Ảnh đã chọn {{ index + 1 }}</span>
+            <div class="sort-actions" [class.expanded]="expandedActions().has('variant:' + imageId)" (click)="$event.stopPropagation()" (keydown.escape)="closeActions('variant:' + imageId, variantToggle, $event)">
+            <button #variantToggle type="button" class="secondary sort-actions-toggle" (click)="toggleActions('variant:' + imageId)" [attr.aria-expanded]="expandedActions().has('variant:' + imageId)" [attr.aria-label]="'Thao tác cho ảnh đã chọn ' + (index + 1)">⋯</button>
+            <div class="sort-actions-buttons">
+            <button type="button" class="secondary icon-button" (click)="reorderImages(index, 0, true)" [disabled]="busy() || index === 0" [attr.aria-label]="'Đưa ảnh đã chọn ' + (index + 1) + ' lên đầu'" title="Đưa lên đầu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14M12 20V8m-5 5 5-5 5 5"/></svg></button>
+            <button type="button" class="secondary icon-button" (click)="moveImage(index, -1, true)" [disabled]="busy() || index === 0" [attr.aria-label]="'Đưa ảnh đã chọn ' + (index + 1) + ' lên'">↑</button>
+            <button type="button" class="secondary icon-button" (click)="moveImage(index, 1, true)" [disabled]="busy() || index === selectedImages().length - 1" [attr.aria-label]="'Đưa ảnh đã chọn ' + (index + 1) + ' xuống'">↓</button>
+            <button type="button" class="secondary icon-button" (click)="reorderImages(index, selectedImages().length - 1, true)" [disabled]="busy() || index === selectedImages().length - 1" [attr.aria-label]="'Đưa ảnh đã chọn ' + (index + 1) + ' xuống cuối'" title="Đưa xuống cuối"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14M12 4v12m-5-5 5 5 5-5"/></svg></button>
+            </div></div>
+          </li>
+        } @empty { <li>Chưa chọn ảnh.</li> }
+      </ol>
+      }
+    }
+  </section>
+  <dialog #preview aria-labelledby="preview-title"><h2 id="preview-title">Xem ảnh</h2><img #previewImage class="preview-image" alt="Ảnh sản phẩm phóng lớn"><form method="dialog"><button type="submit" autofocus>Đóng</button></form></dialog>
+}
+}
+}

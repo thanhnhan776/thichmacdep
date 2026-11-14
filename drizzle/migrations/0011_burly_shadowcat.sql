@@ -1,0 +1,1 @@
+ALTER TABLE `product_variants` ADD `description` text;

@@ -53,7 +53,12 @@
             <p class="copy-status" aria-live="polite">{{ copyStatus() }}</p>
           </div>
           @if (page.product.sku) { <p class="metadata">SKU: {{ page.product.sku }}</p> }
-          @if (page.product.description) { <details open><summary>{{ language.text().description }}</summary><p class="description">{{ page.product.description }}</p></details> }
+          @if (page.product.description || variant()?.description) {
+            <details open><summary>{{ language.text().description }}</summary>
+              @if (page.product.description) { <p class="description">{{ page.product.description }}</p> }
+              @if (variant()?.description; as variantDescription) { <p class="description">{{ variantDescription }}</p> }
+            </details>
+          }
         </section>
       </div>
     </main>

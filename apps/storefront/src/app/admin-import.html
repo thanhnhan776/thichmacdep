@@ -1,70 +1,87 @@
 <main class="admin">
   <header class="heading">
-    <div><p class="eyebrow">Administration</p><h1>Import products</h1></div>
+    <div><p class="eyebrow">Quản trị</p><h1>Quản trị sản phẩm</h1></div>
     @if (session(); as user) {
-      <div class="account"><span>{{ user.user.email }}</span><button type="button" class="secondary" (click)="logout()" [disabled]="busy()">Sign out</button></div>
+      <div class="account"><span>{{ user.user.email }}</span><button type="button" class="secondary" (click)="logout()" [disabled]="busy()">Đăng xuất</button></div>
     }
   </header>
   @if (message()) { <p class="notice" role="alert">{{ message() }}</p> }
   @if (state() === 'loading') {
-    <p role="status">Checking your session…</p>
+    <p role="status">Đang kiểm tra phiên đăng nhập…</p>
   } @else if (state() === 'signed-out' || state() === 'denied') {
     <section class="card" aria-labelledby="signin-title">
-      <h2 id="signin-title">Sign in</h2>
-      <p>Only authorized administrators can import products. Use your authorized Google account.</p>
-      <button type="button" (click)="signIn()" [disabled]="busy()">Prepare Google sign-in</button>
+      <h2 id="signin-title">Đăng nhập</h2>
+      <p>Chỉ quản trị viên được cấp quyền mới có thể truy cập. Hãy sử dụng tài khoản Google được cấp quyền.</p>
+      <button type="button" (click)="signIn()" [disabled]="busy()">Đăng nhập bằng Google</button>
       <div id="google-signin" class="google-button"></div>
     </section>
   } @else {
+    <nav aria-label="Các mục quản trị">
+      <a href="/admin/products" [attr.aria-current]="section() === 'products' || section() === 'product-editor' ? 'page' : null">Quản lý sản phẩm</a>
+      <a href="/admin/import" [attr.aria-current]="section() === 'import' ? 'page' : null">Nhập sản phẩm</a>
+      <a href="/admin/administrators" [attr.aria-current]="section() === 'administrators' ? 'page' : null">Quản trị viên</a>
+    </nav>
+    @if (section() === 'products') {
+      @if (session(); as user) { <app-admin-products [csrfToken]="user.csrfToken" (sessionExpired)="expireSession()"></app-admin-products> }
+    } @else if (section() === 'product-editor') {
+      @if (session(); as user) { <app-admin-products mode="editor" [productId]="productId" [csrfToken]="user.csrfToken" (sessionExpired)="expireSession()"></app-admin-products> }
+    } @else if (section() === 'home') {
+      <section class="card"><h2>Quản trị</h2><p>Chọn mục phía trên để quản lý sản phẩm, nhập bảng tính hoặc thêm quản trị viên.</p></section>
+    } @else if (section() === 'administrators') {
     <section class="card" aria-labelledby="admins-title">
-      <h2 id="admins-title">Add an administrator</h2>
-      <p>Enter their lowercase Gmail address. They can sign in with Google after being added.</p>
+      <h2 id="admins-title">Thêm quản trị viên</h2>
+      <p>Nhập địa chỉ Gmail bằng chữ thường. Sau khi được thêm, họ có thể đăng nhập bằng Google.</p>
       <form (submit)="$event.preventDefault(); addAdmin(adminEmail.value, adminEmail)">
-        <label for="admin-email">Gmail address</label>
+        <label for="admin-email">Địa chỉ Gmail</label>
         <div class="admin-form-controls">
           <input #adminEmail id="admin-email" type="email" required maxlength="74" autocomplete="email" [disabled]="busy()">
-          <button type="submit" [disabled]="busy()">Add administrator</button>
+          <button type="submit" [disabled]="busy()">Thêm quản trị viên</button>
         </div>
       </form>
       @if (adminMessage()) { <p role="status">{{ adminMessage() }}</p> }
     </section>
+    } @else {
     <section class="card" aria-labelledby="upload-title">
-      <h2 id="upload-title">Choose a workbook</h2>
-      <p>Choose a single-sheet XLSX file (maximum 5 MiB). The file is checked and previewed before any changes are made.</p>
-      <label for="workbook">XLSX workbook</label>
-      <input id="workbook" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" (change)="selectFile($event)" [disabled]="busy()">
-      @if (busy()) { <p role="status">Working…</p> }
+      <h2 id="upload-title">Chọn bảng tính</h2>
+      <p>Chọn tệp XLSX có một trang tính (tối đa 5 MiB). Tệp được kiểm tra và xem trước khi áp dụng thay đổi.</p>
+      <label class="workbook-upload" [class.disabled]="busy()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M4 16v4h16v-4"/></svg>
+        Chọn tệp XLSX
+        <input id="workbook" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" (change)="selectFile($event)" [disabled]="busy()">
+      </label>
+      @if (busy()) { <p role="status">Đang xử lý…</p> }
     </section>
     @if (result(); as done) {
-      <section class="card success" role="status"><h2>Import complete</h2><p>Created {{ done.created }} products and updated {{ done.updated }} products.</p></section>
+      <section class="card success" role="status"><h2>Nhập hoàn tất</h2><p>Đã tạo {{ done.created }} sản phẩm và cập nhật {{ done.updated }} sản phẩm.</p></section>
     }
     @if (preview(); as review) {
       <section class="card" aria-labelledby="preview-title">
-        <h2 id="preview-title">Review preview</h2>
-        <p>Counts are estimates based on the current catalog. Applying may fail if the catalog changes.</p>
+        <h2 id="preview-title">Kiểm tra bản xem trước</h2>
+        <p>Số lượng được ước tính theo danh mục hiện tại. Việc nhập có thể thất bại nếu danh mục thay đổi.</p>
         <dl class="counts">
-          <div><dt>Rows</dt><dd>{{ review.counts.rows }}</dd></div>
-          <div><dt>Goods</dt><dd>{{ review.counts.goods }}</dd></div>
-          <div><dt>Services</dt><dd>{{ review.counts.services }}</dd></div>
-          <div><dt>Unknown</dt><dd>{{ review.counts.unknown }}</dd></div>
-          <div><dt>Products</dt><dd>{{ review.counts.products }}</dd></div>
-          <div><dt>Image entries</dt><dd>{{ review.counts.images }}</dd></div>
-          <div><dt>To create</dt><dd>{{ review.counts.creates }}</dd></div>
-          <div><dt>To update</dt><dd>{{ review.counts.updates }}</dd></div>
+          <div><dt>Dòng</dt><dd>{{ review.counts.rows }}</dd></div>
+          <div><dt>Hàng hóa</dt><dd>{{ review.counts.goods }}</dd></div>
+          <div><dt>Dịch vụ</dt><dd>{{ review.counts.services }}</dd></div>
+          <div><dt>Không xác định</dt><dd>{{ review.counts.unknown }}</dd></div>
+          <div><dt>Sản phẩm</dt><dd>{{ review.counts.products }}</dd></div>
+          <div><dt>Ảnh</dt><dd>{{ review.counts.images }}</dd></div>
+          <div><dt>Sẽ tạo</dt><dd>{{ review.counts.creates }}</dd></div>
+          <div><dt>Sẽ cập nhật</dt><dd>{{ review.counts.updates }}</dd></div>
         </dl>
-        <h3>Errors ({{ review.errors.length }})</h3>
+        <h3>Lỗi ({{ review.errors.length }})</h3>
         @if (review.errors.length) {
-          <ul>@for (issue of review.errors; track $index) { <li>Row {{ issue.row ?? '—' }}, {{ issue.column }}: {{ issue.reason }}</li> }</ul>
-          <p>Fix these errors and choose the file again before applying.</p>
-        } @else { <p>No validation errors.</p> }
-        <h3>Skipped ({{ review.skipped.length }})</h3>
+          <ul>@for (issue of review.errors; track $index) { <li>Dòng {{ issue.row ?? '—' }}, {{ translateImportColumn(issue.column) }}: {{ translateImportReason(issue.reason) }}</li> }</ul>
+          <p>Hãy sửa các lỗi này và chọn lại tệp trước khi nhập.</p>
+        } @else { <p>Không có lỗi kiểm tra dữ liệu.</p> }
+        <h3>Đã bỏ qua ({{ review.skipped.length }})</h3>
         @if (review.skipped.length) {
-          <ul>@for (issue of review.skipped; track $index) { <li>Row {{ issue.row ?? '—' }}, {{ issue.column }}: {{ issue.reason }}</li> }</ul>
-        } @else { <p>No skipped rows.</p> }
-        <p>Applying changes the catalog. Imports are limited to 400 rows, 100 product groups and 1,000 images.</p>
+          <ul>@for (issue of review.skipped; track $index) { <li>Dòng {{ issue.row ?? '—' }}, {{ translateImportColumn(issue.column) }}: {{ translateImportReason(issue.reason) }}</li> }</ul>
+        } @else { <p>Không có dòng nào bị bỏ qua.</p> }
+        <p>Việc nhập sẽ thay đổi danh mục. Mỗi lần nhập tối đa 400 dòng, 100 nhóm sản phẩm và 1.000 ảnh.</p>
         @if (applyLimitMessage(review); as limitMessage) { <p role="alert">{{ limitMessage }}</p> }
-        <button type="button" (click)="apply()" [disabled]="busy() || review.errors.length > 0 || !!applyLimitMessage(review)">Apply import</button>
+        <button type="button" (click)="apply()" [disabled]="busy() || review.errors.length > 0 || !!applyLimitMessage(review)">Áp dụng nhập dữ liệu</button>
       </section>
+    }
     }
   }
 </main>

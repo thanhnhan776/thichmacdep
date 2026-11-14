@@ -103,23 +103,24 @@ export async function applyXlsxImport(db: D1Database, rows: unknown, expectedDig
       const urls = [...new Set(group.variants.flatMap(item => item.images))];
       const urlsJson = JSON.stringify(urls);
       // Delete only rows we created, and only when no other ownership record
-      // references them. Never touch R2 objects or pre-existing editorial rows.
+      // references them or an editor assigned them to a variant. Never touch
+      // R2 objects or pre-existing editorial rows.
       statements.push(db.prepare(`DELETE FROM product_images WHERE id IN (
         SELECT image_id FROM xlsx_product_images WHERE product_id = ? AND created_by_xlsx = 1
         AND source_url NOT IN (SELECT value FROM json_each(?))
         AND NOT EXISTS (SELECT 1 FROM xlsx_product_images other WHERE other.image_id = xlsx_product_images.image_id AND (other.product_id <> xlsx_product_images.product_id OR other.source_url <> xlsx_product_images.source_url))
+        AND NOT EXISTS (SELECT 1 FROM product_variant_images assigned WHERE assigned.image_id = xlsx_product_images.image_id)
       )`).bind(productId, urlsJson));
       statements.push(db.prepare('DELETE FROM xlsx_product_images WHERE product_id = ? AND source_url NOT IN (SELECT value FROM json_each(?))').bind(productId, urlsJson));
       for (const [position, url] of urls.entries()) {
         const imageId = crypto.randomUUID();
-        statements.push(db.prepare('INSERT INTO product_images (id, product_id, source_url, position, created_at, updated_at) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM product_images WHERE product_id = ? AND source_url = ?)')
-          .bind(imageId, productId, url, position, now, now, productId, url));
+        // Append new images without disturbing any editorial ordering.
+        statements.push(db.prepare('INSERT INTO product_images (id, product_id, source_url, position, created_at, updated_at) SELECT ?, ?, ?, COALESCE((SELECT MAX(position) + 1 FROM product_images WHERE product_id = ?), 0), ?, ? WHERE NOT EXISTS (SELECT 1 FROM product_images WHERE product_id = ? AND source_url = ?)')
+          .bind(imageId, productId, url, productId, now, now, productId, url));
         statements.push(db.prepare(`INSERT INTO xlsx_product_images (product_id, source_url, image_id, position, created_by_xlsx)
           SELECT ?, ?, id, ?, id = ? FROM product_images WHERE product_id = ? AND source_url = ? ORDER BY id = ? DESC, id LIMIT 1
           ON CONFLICT(product_id, source_url) DO UPDATE SET position = excluded.position`)
           .bind(productId, url, position, imageId, productId, url, imageId));
-        statements.push(db.prepare(`UPDATE product_images SET position = ? WHERE id = (SELECT image_id FROM xlsx_product_images WHERE product_id = ? AND source_url = ? AND created_by_xlsx = 1)
-          AND (SELECT COUNT(*) FROM xlsx_product_images WHERE image_id = product_images.id) = 1`).bind(position, productId, url));
       }
     }
     statements.push(db.prepare("UPDATE sync_runs SET status = 'completed', completed_at = ?, created_count = ?, updated_count = ?, skipped_count = ? WHERE id = ? AND status = 'running'")

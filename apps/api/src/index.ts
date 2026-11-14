@@ -3,6 +3,8 @@ import { getCategoryBySlug, getProductBySlug, getStoreSettings, listCategories, 
 import { createAdminAuthRoutes } from './routes/admin-auth';
 import { createAdminImportRoutes } from './routes/admin-import';
 import { createAdminUserRoutes } from './routes/admin-users';
+import { createAdminProductRoutes } from './routes/admin-products';
+import { createAdminImageRoutes, serveLocalImage } from './routes/admin-images';
 
 export type Bindings = {
   DB: D1Database;
@@ -10,6 +12,8 @@ export type Bindings = {
   GOOGLE_CLIENT_ID: string;
   ADMIN_ORIGIN: string;
   ADMIN_ALLOW_INSECURE_LOCALHOST?: string;
+  IMAGE_PUBLIC_BASE_URL?: string;
+  IMAGE_ALLOW_LOCAL?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -17,6 +21,9 @@ const app = new Hono<{ Bindings: Bindings }>();
 app.route('/api/admin/auth', createAdminAuthRoutes());
 app.route('/api/admin/import', createAdminImportRoutes());
 app.route('/api/admin/users', createAdminUserRoutes());
+app.route('/api/admin/products', createAdminProductRoutes());
+app.route('/api/admin/images', createAdminImageRoutes());
+app.get('/api/images/:key', serveLocalImage);
 
 app.get('/api/health', (context) => context.json({ status: 'ok' }));
 
@@ -44,21 +51,21 @@ app.get('/api/products', async (context) => {
   const pageSize = positiveInteger(context.req.query('pageSize'), 20);
   const keyword = context.req.query('keyword');
   const category = context.req.query('category');
-  const sort = context.req.query('sort') ?? 'newest';
+  const sort = context.req.query('sort') ?? 'trending';
   if (page === null || pageSize === null || pageSize > 100 || !Number.isSafeInteger((page - 1) * pageSize)
     || (keyword !== undefined && (!keyword.trim() || keyword.length > 200))
     || (category !== undefined && (!category.trim() || category.length > 200))
-    || !['newest', 'price-asc', 'price-desc', 'name-asc', 'name-desc'].includes(sort)) {
+    || !['trending', 'newest', 'price-asc', 'price-desc', 'name-asc', 'name-desc'].includes(sort)) {
     return context.json(invalidQuery, 400);
   }
-  const result = await listProducts(context.env.DB, { page, pageSize, keyword, category, sort: sort as import('./services/catalog.service').ProductSort });
+  const result = await listProducts(context.env.DB, { page, pageSize, keyword, category, sort: sort as import('./services/catalog.service').ProductSort }, context.env.IMAGE_PUBLIC_BASE_URL, context.env.IMAGE_ALLOW_LOCAL === 'true');
   context.header('Cache-Control', 'public, max-age=60');
   return context.json(result);
 });
 
 app.get('/api/products/:slug', async (context) => {
   if (!validQuery(context.req.url, [])) return context.json(invalidQuery, 400);
-  const product = await getProductBySlug(context.env.DB, context.req.param('slug'));
+  const product = await getProductBySlug(context.env.DB, context.req.param('slug'), context.env.IMAGE_PUBLIC_BASE_URL, context.env.IMAGE_ALLOW_LOCAL === 'true');
   if (!product) return context.json(notFound, 404);
   context.header('Cache-Control', 'public, max-age=60');
   return context.json(product);

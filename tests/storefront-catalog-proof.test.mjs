@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -133,7 +133,7 @@ test('isolated multiworker D1 data reaches dynamic raw SSR HTML', { timeout: 180
     assert.equal((await get('/no-such-page.css')).status, 404);
     const admin = await get('/admin/import');
     assert.equal(admin.status, 200);
-    assert.match(await admin.text(), /Import products/);
+    assert.match(await admin.text(), /Quản trị sản phẩm/);
     await d1('execute', 'DB', '--command', "UPDATE products SET name = 'Linen Proof Changed' WHERE id = 'prod-linen-shirt'");
     const updatedApi = await get('/api/products/linen-shirt');
     assert.equal(updatedApi.status, 200);
@@ -160,19 +160,20 @@ test('synthetic admin import and reimport update raw SSR without a rebuild', { t
   let worker;
   try {
     const keys = await generateKeyPair('RS256', { extractable: true });
+    const base = `http://127.0.0.1:${await port()}`;
     const origin = 'https://admin.example.test';
     await writeFile(envFile, '');
     await writeFile(config, JSON.stringify({
       name: 'thichmacdep-api-local', main: join(root, 'tests/admin-ssr-api-worker.ts'),
       compatibility_date: '2026-11-01',
       d1_databases: [{ binding: 'DB', database_name: 'thichmacdep-local', database_id: '00000000-0000-0000-0000-000000000000', migrations_dir: join(root, 'drizzle/migrations') }],
-      vars: { GOOGLE_CLIENT_ID: 'synthetic-client', ADMIN_ORIGIN: origin, TEST_PUBLIC_JWK: JSON.stringify(await exportJWK(keys.publicKey)) },
+      r2_buckets: [{ binding: 'IMAGES', bucket_name: 'thichmacdep-local' }],
+      vars: { GOOGLE_CLIENT_ID: 'synthetic-client', ADMIN_ORIGIN: origin, TEST_PUBLIC_JWK: JSON.stringify(await exportJWK(keys.publicKey)), IMAGE_PUBLIC_BASE_URL: `${base}/api/images/`, IMAGE_ALLOW_LOCAL: 'true' },
     }));
     const d1 = (...args) => run([wrangler, 'd1', ...args, '--local', '-c', config, '--persist-to', state]);
     await d1('migrations', 'apply', 'DB');
     await d1('execute', 'DB', '--command', "INSERT INTO admin_users (id, email, role, is_enabled, created_at, updated_at) VALUES ('synthetic-admin', 'synthetic@gmail.com', 'admin', 1, '2026', '2026')");
     await run([join(root, 'apps/storefront/node_modules/@angular/cli/bin/ng.js'), 'build', '--project', 'storefront'], join(root, 'apps/storefront'));
-    const base = `http://127.0.0.1:${await port()}`;
     worker = start([wrangler, 'dev', '-c', 'apps/storefront/wrangler.jsonc', '-c', config, '--local', '--ip', '127.0.0.1', '--port', new URL(base).port, '--persist-to', state, '--env-file', envFile, '--var', 'SITE_ORIGIN:https://storefront.example.test']);
     const deadline = Date.now() + 45000;
     while (!/ready on/i.test(worker.output())) {
@@ -220,6 +221,21 @@ test('synthetic admin import and reimport update raw SSR without a rebuild', { t
     assert.equal(list.total, 1);
     const { id, slug } = list.items[0];
     assert.ok(id && slug);
+    const localConfig = await readFile(join(root, 'wrangler.storefront-local.jsonc'), 'utf8');
+    assert.match(localConfig, /"IMAGE_PUBLIC_BASE_URL":\s*"http:\/\/localhost:4200\/api\/images\/"/);
+    const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    const upload = await request('/api/admin/images', { method: 'POST', headers: { ...headers, 'Content-Type': 'image/png' }, body: png });
+    assert.equal(upload.status, 201);
+    const { url } = await upload.json();
+    assert.equal(new URL(url).origin, base);
+    const attach = await request(`/api/admin/products/${id}/images`, post(headers, { url }));
+    assert.equal(attach.status, 201);
+    const image = await fetch(url);
+    assert.equal(image.status, 200);
+    assert.equal(image.headers.get('content-type'), 'image/png');
+    assert.deepEqual(new Uint8Array(await image.arrayBuffer()), png);
+    const imageProduct = await (await request(`/api/products/${encodeURIComponent(slug)}`)).json();
+    assert.ok(imageProduct.images.some(image => image.url === url));
     const page = async () => {
       const response = await request(`/products/${encodeURIComponent(slug)}`);
       assert.equal(response.status, 200);

@@ -3,6 +3,10 @@ import { createAdminAuth, csrfSecret, sessionCookie, verifyCsrf } from '../apps/
 import { createAdminAuthRoutes } from '../apps/api/src/routes/admin-auth.ts';
 import { createAdminImportRoutes } from '../apps/api/src/routes/admin-import.ts';
 import { createAdminUserRoutes } from '../apps/api/src/routes/admin-users.ts';
+import { checkAdminProducts } from './admin-products-checks.ts';
+import { createAdminImageRoutes } from '../apps/api/src/routes/admin-images.ts';
+import { publicImageUrl } from '../apps/api/src/services/image-url.ts';
+import api from '../apps/api/src/index.ts';
 
 function assert(value: unknown): asserts value {
   if (!value) throw new Error('Authentication test assertion failed');
@@ -105,6 +109,30 @@ export default {
       const sessionResponse = await request('/session', { headers: sessionHeaders });
       const sessionBody = await sessionResponse.json() as { csrfToken: string; user: { id: string } };
       assert(sessionResponse.status === 200 && sessionBody.user.id === 'a' && sessionBody.csrfToken === await csrfSecret(sessionToken));
+      let stored = 0;
+      const bucket = { put: async () => { stored++; } } as unknown as R2Bucket;
+      const imageBindings = { ...bindings, IMAGES: bucket, IMAGE_PUBLIC_BASE_URL: 'https://images.example.test/products/' };
+      const images = createAdminImageRoutes({ clock: () => now });
+      const imageHeaders = { ...sessionHeaders, Origin: bindings.ADMIN_ORIGIN, 'X-CSRF-Token': sessionBody.csrfToken, 'Content-Type': 'image/png' };
+      const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+      const imageRequest = (headers: Record<string, string>, body: BodyInit) => images.request('https://api.example.test/', { method: 'POST', headers, body }, imageBindings);
+      assert((await imageRequest({ 'Content-Type': 'image/png' }, png)).status === 401);
+      assert((await imageRequest({ ...imageHeaders, Origin: 'https://evil.test' }, png)).status === 403);
+      assert((await imageRequest(imageHeaders, new Uint8Array([1, 2, 3]))).status === 400);
+      assert((await imageRequest({ ...imageHeaders, 'Content-Type': 'image/jpeg' }, png)).status === 400);
+      assert((await imageRequest(imageHeaders, new Uint8Array(5 * 1024 * 1024 + 1))).status === 413);
+      const uploaded = await imageRequest(imageHeaders, png);
+      const uploadedBody = await uploaded.json() as { url: string };
+      assert(uploaded.status === 201 && stored === 1 && publicImageUrl(uploadedBody.url, imageBindings.IMAGE_PUBLIC_BASE_URL) === uploadedBody.url);
+      assert(!publicImageUrl('https://images.example.test.evil/products/a', imageBindings.IMAGE_PUBLIC_BASE_URL));
+      assert(!publicImageUrl('http://127.0.0.1:8787/api/images/a', 'http://127.0.0.1:8787/api/images/'));
+      let reads = 0;
+      const localBucket = { get: async () => { reads++; return null; } } as unknown as R2Bucket;
+      const localBindings = { ...bindings, IMAGES: localBucket, IMAGE_PUBLIC_BASE_URL: 'http://localhost:4200/api/images/', IMAGE_ALLOW_LOCAL: 'true' };
+      const imagePath = '/api/images/12345678-1234-4123-8123-123456789abc.png';
+      assert((await api.request(`http://localhost:4200${imagePath}`, {}, localBindings)).status === 404 && reads === 1);
+      assert((await api.request(`http://localhost:4201${imagePath}`, {}, localBindings)).status === 404 && reads === 1);
+      await checkAdminProducts(db, sessionToken, sessionBody.csrfToken, now);
       await db.prepare("UPDATE admin_users SET is_enabled = 0 WHERE id = 'a'").run();
       assert((await request('/session', { headers: sessionHeaders })).status === 401);
       await db.prepare("UPDATE admin_users SET is_enabled = 1 WHERE id = 'a'").run();

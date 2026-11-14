@@ -7,10 +7,11 @@ export interface WebsiteProductSettings { seoTitle: string | null; seoDescriptio
 export interface Product { id: string; sku: string | null; slug: string; name: string; shortDescription: string | null; description: string | null; brandName: string | null; priceMinor: number | null; currency: string; website: WebsiteProductSettings }
 export interface Category { id: string; name: string; slug: string; parentId: string | null }
 export interface ProductListItem extends Product { primaryImage: { url: string; altText: string | null } | null; sizes: string[] }
-export interface ProductDetail extends Product { images: { id: string; url: string; altText: string | null; position: number }[]; variants: { id: string; sku: string | null; name: string; attributesJson: string | null; priceMinor: number | null }[]; categories: Category[] }
+export interface ProductImage { id: string; url: string; altText: string | null; position: number }
+export interface ProductDetail extends Product { images: ProductImage[]; variants: { id: string; sku: string | null; name: string; description: string | null; attributesJson: string | null; priceMinor: number | null; images?: ProductImage[] }[]; categories: Category[] }
 export interface ProductPage { items: ProductListItem[]; total: number; page: number; pageSize: number }
 export interface StoreSettings { storeName: string; defaultCurrency: string; tiktokUrl: string | null; instagramUrl: string | null; zaloUrl: string | null; messengerUrl: string | null; otherContactUrl: string | null; logoUrl: string | null }
-export type ProductSort = 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc';
+export type ProductSort = 'trending' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc';
 export interface ProductQuery { page?: number; pageSize?: number; keyword?: string; category?: string; sort?: ProductSort }
 
 const MAX_BYTES = 256 * 1024;
@@ -30,7 +31,8 @@ const product: Parser<Product> = v => { const x = obj(v), w = obj(x['website']);
 }; };
 const image = (v: unknown) => { const x = obj(v); return { url: str(x['url']), altText: ns(x['altText']) }; };
 const listItem: Parser<ProductListItem> = v => { const x = obj(v); return { ...product(v), primaryImage: nullable(image)(x['primaryImage']), sizes: array(str)(x['sizes']) }; };
-const detail: Parser<ProductDetail> = v => { const x = obj(v); return { ...product(v), images: array(v => { const x = obj(v); return { id: str(x['id']), ...image(v), position: integer(x['position']) }; })(x['images']), variants: array(v => { const x = obj(v); return { id: str(x['id']), sku: ns(x['sku']), name: str(x['name']), attributesJson: ns(x['attributesJson']), priceMinor: ni(x['priceMinor']) }; })(x['variants']), categories: array(category)(x['categories']) }; };
+const detailImage: Parser<ProductImage> = v => { const x = obj(v); return { id: str(x['id']), ...image(v), position: integer(x['position']) }; };
+const detail: Parser<ProductDetail> = v => { const x = obj(v); return { ...product(v), images: array(detailImage)(x['images']), variants: array(v => { const x = obj(v); return { id: str(x['id']), sku: ns(x['sku']), name: str(x['name']), description: x['description'] === undefined ? null : ns(x['description']), attributesJson: ns(x['attributesJson']), priceMinor: ni(x['priceMinor']), ...(x['images'] === undefined ? {} : { images: array(detailImage)(x['images']) }) }; })(x['variants']), categories: array(category)(x['categories']) }; };
 const page: Parser<ProductPage> = v => { const x = obj(v); const result = { items: array(listItem)(x['items']), total: integer(x['total']), page: integer(x['page']), pageSize: integer(x['pageSize']) }; if (result.total < 0 || result.page < 1 || result.pageSize < 1 || result.pageSize > 100 || result.items.length > result.pageSize) invalid(); return result; };
 const settings: Parser<StoreSettings> = v => { const x = obj(v); return { storeName: str(x['storeName']), defaultCurrency: str(x['defaultCurrency']), tiktokUrl: ns(x['tiktokUrl']), instagramUrl: ns(x['instagramUrl']), zaloUrl: ns(x['zaloUrl']), messengerUrl: ns(x['messengerUrl']), otherContactUrl: ns(x['otherContactUrl']), logoUrl: ns(x['logoUrl']) }; };
 
@@ -58,10 +60,10 @@ export class CatalogApi {
   private readonly context = inject(REQUEST_CONTEXT) as { catalogFetch?: (request: Request) => Promise<Response> } | null;
 
   products(query: ProductQuery = {}): Promise<ProductPage> {
-    const { page: p = 1, pageSize = 20, keyword, category: filter, sort = 'newest' } = query;
+    const { page: p = 1, pageSize = 20, keyword, category: filter, sort = 'trending' } = query;
     if (!Number.isSafeInteger(p) || p < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100 || !Number.isSafeInteger((p - 1) * pageSize)) throw new Error('Invalid pagination');
     const params = new URLSearchParams({ page: String(p), pageSize: String(pageSize) });
-    if (!['newest', 'price-asc', 'price-desc', 'name-asc', 'name-desc'].includes(sort)) throw new Error('Invalid sort');
+    if (!['trending', 'newest', 'price-asc', 'price-desc', 'name-asc', 'name-desc'].includes(sort)) throw new Error('Invalid sort');
     params.set('sort', sort);
     for (const [key, value] of [['keyword', keyword], ['category', filter]] as const) if (value !== undefined) { if (!value.trim() || value.length > 200) throw new Error('Invalid query'); params.set(key, value); }
     return this.get(`/api/products?${params}`, page, false) as Promise<ProductPage>;

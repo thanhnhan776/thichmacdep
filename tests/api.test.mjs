@@ -124,7 +124,12 @@ test('local D1 catalog integration', { timeout: 120000 }, async (t) => {
        ('test-cotton-h', 'prod-cotton-tee', 'H', '{"size":"m","color":"Red"}', 1),
        ('test-cotton-i', 'prod-cotton-tee', 'I', '{"size":"xs","color":"Blue"}', 1),
        ('test-cotton-j', 'prod-cotton-tee', 'J', '{"size":"zeta"}', 1),
-       ('test-cotton-k', 'prod-cotton-tee', 'K', '{"size":"alpha"}', 1);`]);
+       ('test-cotton-k', 'prod-cotton-tee', 'K', '{"size":"alpha"}', 1);
+      INSERT INTO product_variant_images (variant_id, image_id, position) VALUES
+        ('variant-linen-shirt-l', 'test-image-later', 0),
+        ('variant-linen-shirt-l', 'test-image-http', 1),
+        ('variant-linen-shirt-l', 'test-image-first', 2);
+      UPDATE product_variants SET description = 'Variant <strong>description</strong>' WHERE id = 'variant-linen-shirt-l';`]);
     await withWorker('wrangler.jsonc', async (url) => {
       async function get(path, status = 200) {
         const response = await fetch(`${url}${path}`);
@@ -192,6 +197,10 @@ test('local D1 catalog integration', { timeout: 120000 }, async (t) => {
           { id: 'test-image-later', url: 'https://cdn1-retail-images.kiotviet.vn/synthetic-later.jpg', altText: null, position: 20 },
         ]);
         assert.deepEqual(product.variants.map((variant) => variant.id).sort(), ['variant-linen-shirt-l', 'variant-linen-shirt-m']);
+        assert.equal(product.variants.find((variant) => variant.id === 'variant-linen-shirt-l').description, 'Variant <strong>description</strong>');
+        assert.equal(product.variants.find((variant) => variant.id === 'variant-linen-shirt-m').description, null);
+        assert.deepEqual(product.variants.find((variant) => variant.id === 'variant-linen-shirt-l').images.map((image) => image.id), ['test-image-later', 'test-image-first']);
+        assert.deepEqual(product.variants.find((variant) => variant.id === 'variant-linen-shirt-m').images, product.images);
         assert.deepEqual(product.categories.map((category) => category.slug).sort(), ['clothing', 'tops']);
         for (const path of ['/api/products/missing', '/api/products/hidden-bag', '/api/products/inactive-hat']) {
           assert.equal((await get(path, 404)).error.code, 'NOT_FOUND');
@@ -228,15 +237,21 @@ test('local D1 catalog integration', { timeout: 120000 }, async (t) => {
           INSERT INTO product_category (product_id, category_id) VALUES
             ('sort-a', 'cat-sort-test'), ('sort-b', 'cat-sort-test'),
             ('sort-c', 'cat-sort-test'), ('sort-d', 'cat-sort-test');
+          INSERT INTO website_product_settings (product_id, is_featured, display_order, created_at, updated_at) VALUES
+            ('sort-a', 0, 0, '2020', '2020'), ('sort-b', 0, 0, '2020', '2020'),
+            ('sort-c', 1, 0, '2020', '2020'), ('sort-d', 0, 0, '2020', '2020');
+          UPDATE products SET is_trending = 1, trending_sort_order = 2 WHERE id IN ('sort-a', 'sort-b');
+          UPDATE products SET is_trending = 1, trending_sort_order = 1 WHERE id = 'sort-d';
         `]);
         const orders = {
+          trending: ['sort-d', 'sort-a', 'sort-b', 'sort-c'],
           newest: ['sort-c', 'sort-a', 'sort-b', 'sort-d'],
           'price-asc': ['sort-c', 'sort-a', 'sort-b', 'sort-d'],
           'price-desc': ['sort-a', 'sort-b', 'sort-c', 'sort-d'],
           'name-asc': ['sort-a', 'sort-b', 'sort-c', 'sort-d'],
           'name-desc': ['sort-d', 'sort-c', 'sort-a', 'sort-b'],
         };
-        assert.deepEqual(slugs(await get('/api/products?category=sort-test')), orders.newest);
+        assert.deepEqual(slugs(await get('/api/products?category=sort-test')), orders.trending);
         for (const [sort, expected] of Object.entries(orders)) {
           const query = `/api/products?category=sort-test&sort=${sort}`;
           const all = await get(query);
@@ -250,6 +265,19 @@ test('local D1 catalog integration', { timeout: 120000 }, async (t) => {
           assert.deepEqual(slugs(second), expected.slice(2), sort);
           assert.deepEqual(slugs(await get(`${query}&keyword=alpha`)), expected.filter((slug) => slug === 'sort-a' || slug === 'sort-b'), sort);
         }
+      });
+      await t.test('default trending order breaks nontrending creation ties by id', async () => {
+        await runD1(persistPath, ['execute', 'DB', '--command', `
+          INSERT INTO categories (id, name, slug, is_active, created_at, updated_at) VALUES
+            ('cat-trending-ties', 'Trending ties', 'trending-ties', 1, '2020', '2020');
+          INSERT INTO products (id, sku, slug, name, currency, is_active, created_at, updated_at) VALUES
+            ('tie-b', 'TIE-B', 'tie-b', 'Tie B', 'VND', 1, '2025', '2025'),
+            ('tie-a', 'TIE-A', 'tie-a', 'Tie A', 'VND', 1, '2025', '2025');
+          INSERT INTO product_category (product_id, category_id) VALUES
+            ('tie-b', 'cat-trending-ties'), ('tie-a', 'cat-trending-ties');
+        `]);
+        assert.deepEqual(slugs(await get('/api/products?category=trending-ties')), ['tie-a', 'tie-b']);
+        assert.deepEqual(slugs(await get('/api/products?category=trending-ties&page=2&pageSize=1')), ['tie-b']);
       });
     }, persistPath);
   } finally {

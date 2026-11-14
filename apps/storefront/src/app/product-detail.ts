@@ -100,11 +100,11 @@ export class ProductDetail {
   readonly detail = computed(() => this.data()['productDetail'] as ProductDetailPageData);
   readonly product = computed(() => { const detail = this.detail(); return detail?.status === 'success' ? detail.product : null; });
   private readonly identity = computed(() => this.product()?.id ?? null);
-  readonly selectedImage = linkedSignal<string | null, string | null>({ source: this.identity, computation: () => null });
   readonly failedImages = linkedSignal<string | null, readonly string[]>({ source: this.identity, computation: () => [] });
   readonly selectedVariant = linkedSignal<string | null, string | null>({ source: this.identity, computation: () => null });
+  readonly selectedImage = linkedSignal({ source: () => [this.identity(), this.selectedVariant()] as const, computation: (): string | null => null });
   readonly copyStatus = linkedSignal<string | null, string>({ source: this.identity, computation: () => '' });
-  readonly images = computed(() => (this.product()?.images ?? []).filter(image => safeImage(image.url) && !this.failedImages().includes(image.url)).slice().sort((a, b) => a.position - b.position));
+  readonly images = computed(() => (this.variant()?.images ?? this.product()?.images ?? []).filter(image => safeImage(image.url) && !this.failedImages().includes(image.url)));
   readonly image = computed(() => this.images().find(image => image.id === this.selectedImage()) ?? this.images()[0] ?? null);
   readonly variant = computed(() => this.product()?.variants.find(variant => variant.id === this.selectedVariant()) ?? null);
   readonly sortedVariants = computed(() => sortVariants(this.product()?.variants ?? []));

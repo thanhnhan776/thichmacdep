@@ -64,6 +64,27 @@
       "when": 1794473483862,
       "tag": "0008_gray_mystique",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794562694301,
+      "tag": "0009_magical_tomas",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1794571292754,
+      "tag": "0010_uneven_tomas",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1794583820092,
+      "tag": "0011_burly_shadowcat",
+      "breakpoints": true
     }
   ]
 }

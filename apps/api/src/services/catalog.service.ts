@@ -10,7 +10,7 @@ export interface ProductListInput {
   category?: string;
   sort?: ProductSort;
 }
-export type ProductSort = 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc';
+export type ProductSort = 'trending' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc';
 
 export interface WebsiteProductSettings {
   seoTitle: string | null;
@@ -57,8 +57,10 @@ export interface ProductVariant {
   id: string;
   sku: string | null;
   name: string;
+  description: string | null;
   attributesJson: string | null;
   priceMinor: number | null;
+  images: ProductImage[];
 }
 
 export interface ProductDetail extends Product {
@@ -127,10 +129,11 @@ function productFilters(input: ProductListInput): { where: string; args: string[
   return { where: conditions.join(' AND '), args };
 }
 
-export async function listProducts(db: D1Database, input: ProductListInput): Promise<{ items: ProductListItem[]; total: number; page: number; pageSize: number }> {
+export async function listProducts(db: D1Database, input: ProductListInput, imageBase?: string, allowLocal = false): Promise<{ items: ProductListItem[]; total: number; page: number; pageSize: number }> {
   validatePagination(input.page, input.pageSize);
-  const sort = input.sort ?? 'newest';
+  const sort = input.sort ?? 'trending';
   const orders: Record<ProductSort, string> = {
+    trending: 'p.is_trending DESC, CASE WHEN p.is_trending = 1 THEN p.trending_sort_order END ASC, CASE WHEN p.is_trending = 0 THEN p.created_at END DESC, p.id ASC',
     newest: 'p.created_at DESC, p.id ASC',
     'price-asc': 'p.price_minor IS NULL, p.price_minor ASC, p.id ASC',
     'price-desc': 'p.price_minor IS NULL, p.price_minor DESC, p.id ASC',
@@ -161,7 +164,7 @@ export async function listProducts(db: D1Database, input: ProductListInput): Pro
     const byId = new Map(items.map((item) => [item.id, item]));
     for (const image of images.results) {
       const item = byId.get(image.productId);
-      const url = publicImageUrl(image.url);
+      const url = publicImageUrl(image.url, imageBase, allowLocal);
       if (item && !item.primaryImage && url) item.primaryImage = { url, altText: image.altText };
     }
     for (const variant of variants.results) {
@@ -181,27 +184,43 @@ export async function listProducts(db: D1Database, input: ProductListInput): Pro
   return { items, total: count?.total ?? 0, page: input.page, pageSize: input.pageSize };
 }
 
-export async function getProductBySlug(db: D1Database, slug: string): Promise<ProductDetail | null> {
+export async function getProductBySlug(db: D1Database, slug: string, imageBase?: string, allowLocal = false): Promise<ProductDetail | null> {
   const row = await db.prepare(`SELECT ${PRODUCT_FIELDS} ${PRODUCT_FROM} WHERE ${VISIBLE_PRODUCT} AND p.slug = ? LIMIT 1`)
     .bind(slug).first<ProductRow>();
   if (!row) return null;
-  const [images, variants, categories] = await Promise.all([
+  const [images, variants, categories, assignments] = await Promise.all([
     db.prepare(`SELECT id, source_url AS url, alt_text AS altText, position
       FROM product_images WHERE product_id = ? ORDER BY position, id`)
       .bind(row.id).all<{ id: string; url: string | null; altText: string | null; position: number }>(),
-    db.prepare(`SELECT id, sku, name, attributes_json AS attributesJson, price_minor AS priceMinor
+    db.prepare(`SELECT id, sku, name, description, attributes_json AS attributesJson, price_minor AS priceMinor
       FROM product_variants WHERE product_id = ? AND is_active = 1 ORDER BY name COLLATE NOCASE, id`)
-      .bind(row.id).all<ProductVariant>(),
+      .bind(row.id).all<Omit<ProductVariant, 'images'>>(),
     db.prepare(`SELECT ${CATEGORY_FIELDS} FROM categories c JOIN product_category pc ON pc.category_id = c.id
       WHERE pc.product_id = ? AND c.is_active = 1 ORDER BY c.name COLLATE NOCASE, c.id`)
       .bind(row.id).all<Category>(),
+    db.prepare(`SELECT v.variant_id AS variantId, v.image_id AS imageId
+      FROM product_variant_images v
+      JOIN product_variants pv ON pv.id = v.variant_id
+      JOIN product_images i ON i.id = v.image_id AND i.product_id = pv.product_id
+      WHERE pv.product_id = ? AND pv.is_active = 1 ORDER BY v.variant_id, v.position, i.id`)
+      .bind(row.id).all<{ variantId: string; imageId: string }>(),
   ]);
   const publicImages: ProductImage[] = [];
   for (const image of images.results) {
-    const url = publicImageUrl(image.url);
+    const url = publicImageUrl(image.url, imageBase, allowLocal);
     if (url) publicImages.push({ id: image.id, url, altText: image.altText, position: image.position });
   }
-  return { ...toProduct(row), images: publicImages, variants: variants.results, categories: categories.results };
+  const imagesById = new Map(publicImages.map(image => [image.id, image]));
+  const assigned = new Map<string, ProductImage[]>();
+  for (const assignment of assignments.results) {
+    const list = assigned.get(assignment.variantId) ?? [];
+    const image = imagesById.get(assignment.imageId);
+    if (image) list.push(image);
+    assigned.set(assignment.variantId, list);
+  }
+  return { ...toProduct(row), images: publicImages, variants: variants.results.map(variant => ({
+    ...variant, images: assigned.get(variant.id) ?? publicImages,
+  })), categories: categories.results };
 }
 
 export async function listCategories(db: D1Database): Promise<Category[]> {

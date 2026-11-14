@@ -1,11 +1,14 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
+import { ActivatedRoute } from '@angular/router';
 import { vi } from 'vitest';
 import * as XLSX from 'xlsx';
 import { AdminApi, type ImportPreview } from './admin-api';
 import { AdminImport } from './admin-import';
 import type { XlsxRowValues } from './xlsx-parser';
+import { routes } from './app.routes';
 
 describe('admin import API', () => {
   let api: AdminApi;
@@ -81,12 +84,56 @@ describe('admin import API', () => {
 });
 
 describe('admin import screen', () => {
+  it.each([
+    ['admin', 'home'],
+    ['admin/products', 'products'],
+    ['admin/import', 'import'],
+    ['admin/administrators', 'administrators'],
+  ])('maps /%s to the %s area', (path, section) => {
+    const route = routes.find(candidate => candidate.path === path);
+    expect(route?.component).toBe(AdminImport);
+    expect(route?.data?.['section']).toBe(section);
+  });
+
+  it('shows navigation and only the selected area for an authenticated administrator', async () => {
+    const api = { session: vi.fn().mockResolvedValue({ user: { id: 'test', email: 'test@gmail.com' }, csrfToken: 'synthetic' }) };
+    TestBed.configureTestingModule({ imports: [AdminImport], providers: [
+      { provide: AdminApi, useValue: api },
+      { provide: ActivatedRoute, useValue: { snapshot: { data: { section: 'administrators' } } } },
+    ] });
+    const fixture = TestBed.createComponent(AdminImport);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('a[href="/admin/import"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('a[href="/admin/products"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('a[href="/admin/administrators"][aria-current="page"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('#admin-email')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('#workbook')).toBeNull();
+  });
+
+  it('shows sign-in instead of protected areas when the session is unauthorized', async () => {
+    const api = { session: vi.fn().mockRejectedValue(new HttpErrorResponse({ status: 401 })) };
+    TestBed.configureTestingModule({ imports: [AdminImport], providers: [
+      { provide: AdminApi, useValue: api },
+      { provide: ActivatedRoute, useValue: { snapshot: { data: { section: 'administrators' } } } },
+    ] });
+    const fixture = TestBed.createComponent(AdminImport);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Đăng nhập bằng Google');
+    expect(fixture.nativeElement.querySelector('nav')).toBeNull();
+    expect(fixture.nativeElement.querySelector('#admin-email')).toBeNull();
+  });
+
   it('shows the add-admin form only for a signed-in administrator and reports success', async () => {
     const api = { session: vi.fn().mockResolvedValue({ user: { id: 'test', email: 'test@gmail.com' }, csrfToken: 'synthetic' }), addAdmin: vi.fn().mockResolvedValue({ ok: true }) };
     TestBed.configureTestingModule({ imports: [AdminImport], providers: [{ provide: AdminApi, useValue: api }] });
     const fixture = TestBed.createComponent(AdminImport);
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.componentInstance.section.set('administrators');
     fixture.detectChanges();
     const input = fixture.nativeElement.querySelector('#admin-email') as HTMLInputElement;
     expect(input).toBeTruthy();
@@ -94,7 +141,7 @@ describe('admin import screen', () => {
     await fixture.componentInstance.addAdmin(input.value, input);
     expect(api.addAdmin).toHaveBeenCalledWith('new@gmail.com', 'synthetic');
     expect(input.value).toBe('');
-    expect(fixture.componentInstance.adminMessage()).toContain('Administrator added');
+    expect(fixture.componentInstance.adminMessage()).toContain('Đã thêm quản trị viên');
     fixture.componentInstance.state.set('signed-out');
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('#admin-email')).toBeNull();
@@ -104,7 +151,7 @@ describe('admin import screen', () => {
     TestBed.configureTestingModule({ imports: [AdminImport], providers: [{ provide: AdminApi, useValue: api }] });
     const fixture = TestBed.createComponent(AdminImport);
     await fixture.componentInstance.signIn();
-    expect(fixture.componentInstance.message()).toBe('Google sign-in is not configured.');
+    expect(fixture.componentInstance.message()).toBe('Chưa cấu hình đăng nhập Google.');
     expect(api.challenge).not.toHaveBeenCalled();
   });
 
@@ -120,7 +167,7 @@ describe('admin import screen', () => {
       const fixture = TestBed.createComponent(AdminImport);
       await fixture.componentInstance.signIn();
       expect(initialize).toHaveBeenCalledWith(expect.objectContaining({ client_id: 'public-test-client', nonce: 'test-nonce' }));
-      expect(renderButton).toHaveBeenCalled();
+      expect(renderButton).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ locale: 'vi' }));
     } finally { container.remove(); delete window.google; }
   });
   it('shows validation errors and prevents applying an invalid preview', async () => {
@@ -136,9 +183,9 @@ describe('admin import screen', () => {
       errors: [{ row: 2, column: 'Mã hàng', reason: 'Invalid value' }], skipped: [],
     });
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Invalid value');
+    expect(fixture.nativeElement.textContent).toContain('Giá trị không hợp lệ');
     const button = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
-      .find(element => element.textContent?.includes('Apply import'));
+      .find(element => element.textContent?.includes('Áp dụng nhập dữ liệu'));
     expect(button?.disabled).toBe(true);
     await fixture.componentInstance.apply();
     expect(api.apply).not.toHaveBeenCalled();
@@ -171,9 +218,9 @@ describe('admin import screen', () => {
   });
 
   it.each([
-    ['rows', 401, 'rows (401/400)'],
-    ['products', 101, 'product groups (101/100)'],
-    ['images', 1001, 'image entries (1001/1,000)'],
+    ['rows', 401, 'dòng (401/400)'],
+    ['products', 101, 'nhóm sản phẩm (101/100)'],
+    ['images', 1001, 'ảnh (1001/1.000)'],
   ] as const)('blocks an import exceeding the %s limit', async (field, value, message) => {
     const api = { session: vi.fn().mockResolvedValue({ user: { id: 'test', email: 'test@example.com' }, csrfToken: 'synthetic' }), apply: vi.fn() };
     TestBed.configureTestingModule({ imports: [AdminImport], providers: [{ provide: AdminApi, useValue: api }] });
@@ -186,8 +233,8 @@ describe('admin import screen', () => {
     (fixture.componentInstance as unknown as { rows: XlsxRowValues[] }).rows = [{}];
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain(message);
-    expect(fixture.nativeElement.textContent).toContain('Split or reduce the workbook');
-    const button = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(element => element.textContent?.includes('Apply import'));
+    expect(fixture.nativeElement.textContent).toContain('chia nhỏ hoặc giảm dữ liệu');
+    const button = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(element => element.textContent?.includes('Áp dụng nhập dữ liệu'));
     expect(button?.disabled).toBe(true);
     await fixture.componentInstance.apply();
     expect(api.apply).not.toHaveBeenCalled();

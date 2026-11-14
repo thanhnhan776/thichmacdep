@@ -23,7 +23,7 @@ describe('catalog page resolver', () => {
   it('awaits catalog data and passes supported filters to the API', async () => {
     const result = await resolve({ keyword: 'dress', category: 'synthetic', page: '2' });
     expect(result.status).toBe('success');
-    expect(api.products).toHaveBeenCalledWith({ keyword: 'dress', category: 'synthetic', page: 2, pageSize: 12, sort: 'newest' });
+    expect(api.products).toHaveBeenCalledWith({ keyword: 'dress', category: 'synthetic', page: 2, pageSize: 12, sort: 'trending' });
   });
   it('orders category filters while preserving the order of unlisted categories', async () => {
     const names = ['Extra B', 'Khác', 'Áo dài', 'Sơ mi', 'Chân váy', 'Áo kiểu', 'Quần dài', 'Extra A', 'Áo khoác'];
@@ -43,8 +43,14 @@ describe('catalog page resolver', () => {
   });
   it('ignores tracking parameters without forwarding them to the API', async () => {
     expect((await resolve({ utm_source: ['one', 'two'], utm_campaign: 'launch' })).status).toBe('success');
-    expect(api.products).toHaveBeenCalledWith({ page: 1, pageSize: 12, keyword: undefined, category: undefined, sort: 'newest' });
+    expect(api.products).toHaveBeenCalledWith({ page: 1, pageSize: 12, keyword: undefined, category: undefined, sort: 'trending' });
     expect(response.status).toBeUndefined();
+  });
+  it('accepts every explicit sorting option', async () => {
+    for (const sort of ['trending', 'newest', 'price-asc', 'price-desc', 'name-asc', 'name-desc']) {
+      expect((await resolve({ sort })).status).toBe('success');
+      expect(api.products).toHaveBeenLastCalledWith(expect.objectContaining({ sort }));
+    }
   });
   it('returns 404 for an unknown category and 500 for an API failure', async () => {
     expect((await resolve({ category: 'missing' })).status).toBe('not-found');
@@ -64,6 +70,7 @@ describe('catalog page', () => {
     const fixture = TestBed.createComponent(CatalogPage);
     fixture.componentInstance.language.current.set('vi');
     fixture.detectChanges();
+    expect((fixture.nativeElement.querySelector('select option[value="trending"]') as HTMLOptionElement).selected).toBe(true);
     const labels = () => Array.from(fixture.nativeElement.querySelectorAll('option[value^="name-"]') as NodeListOf<HTMLOptionElement>).map(option => option.textContent?.trim());
     expect(labels()).toEqual(['Tên A–Z', 'Tên Z–A']);
     fixture.componentInstance.language.current.set('en');

@@ -16,7 +16,7 @@
     "test:storefront:proxy": "node --test tests/storefront-proxy.test.mjs",
     "test:storefront:catalog": "node --test tests/storefront-catalog-proof.test.mjs",
     "test:storefront:browser": "node --test tests/storefront-browser.test.mjs",
-    "dev:storefront:worker": "pnpm build:storefront && wrangler dev -c apps/storefront/wrangler.jsonc -c wrangler.jsonc --local --ip 127.0.0.1 --port 4200 --persist-to .wrangler/state --env-file .env --var SITE_ORIGIN:http://localhost:4200"
+    "dev:storefront:worker": "pnpm build:storefront && wrangler dev -c apps/storefront/wrangler.jsonc -c wrangler.storefront-local.jsonc --local --ip 127.0.0.1 --port 4200 --persist-to .wrangler/state --env-file .env --var SITE_ORIGIN:http://localhost:4200"
   },
   "packageManager": "pnpm@12.18.0",
   "engines": {

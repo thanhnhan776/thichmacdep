@@ -1,21 +1,27 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { afterNextRender, ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { AdminApi, type AdminSession, type ImportPreview, type ImportResult } from './admin-api';
 import { parseXlsx, type XlsxRowValues } from './xlsx-parser';
+import { AdminProducts } from './admin-products';
+import { translateImportColumn, translateImportReason } from './admin-import-messages';
 
 type GoogleIdentity = { accounts: { id: {
   initialize(options: { client_id: string; nonce: string; callback: (response: { credential: string }) => void }): void;
-  renderButton(element: HTMLElement, options: { theme: string; size: string }): void;
+  renderButton(element: HTMLElement, options: { theme: string; size: string; locale: string }): void;
 } } };
 declare global { interface Window { google?: GoogleIdentity } }
 
 @Component({
   selector: 'app-admin-import',
+  imports: [AdminProducts],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin-import.html',
   styleUrl: './admin-import.css',
 })
 export class AdminImport {
+  readonly translateImportReason = translateImportReason;
+  readonly translateImportColumn = translateImportColumn;
   private readonly api = inject(AdminApi);
   readonly session = signal<AdminSession | null>(null);
   readonly state = signal<'loading' | 'signed-out' | 'denied' | 'ready'>('loading');
@@ -24,6 +30,11 @@ export class AdminImport {
   readonly preview = signal<ImportPreview | null>(null);
   readonly result = signal<ImportResult | null>(null);
   readonly adminMessage = signal('');
+  private readonly route = inject(ActivatedRoute, { optional: true });
+  readonly section = signal<'home' | 'import' | 'products' | 'product-editor' | 'administrators'>(
+    this.route?.snapshot.data['section'] ?? 'import',
+  );
+  readonly productId = this.route?.snapshot.paramMap?.get('id') ?? null;
   private rows: XlsxRowValues[] | null = null;
   private generation = 0;
 
@@ -33,7 +44,7 @@ export class AdminImport {
     try { this.session.set(await this.api.session()); this.state.set('ready'); }
     catch (error) {
       this.state.set('signed-out');
-      if (!(error instanceof HttpErrorResponse) || error.status !== 401) this.message.set('Unable to check your session. Please try again.');
+      if (!(error instanceof HttpErrorResponse) || error.status !== 401) this.message.set('Không thể kiểm tra phiên đăng nhập. Vui lòng thử lại.');
     }
   }
 
@@ -42,16 +53,16 @@ export class AdminImport {
     this.busy.set(true); this.message.set('');
     try {
       const { googleClientId } = await this.api.config();
-      if (typeof googleClientId !== 'string' || !googleClientId.trim()) throw new Error('Google sign-in is not configured.');
+      if (typeof googleClientId !== 'string' || !googleClientId.trim()) throw new Error('Chưa cấu hình đăng nhập Google.');
       await this.loadGoogle();
       const { nonce } = await this.api.challenge();
       const container = document.getElementById('google-signin');
-      if (!container || !window.google) throw new Error('Google sign-in is unavailable.');
+      if (!container || !window.google) throw new Error('Không thể sử dụng đăng nhập Google.');
       container.replaceChildren();
       window.google.accounts.id.initialize({ client_id: googleClientId, nonce, callback: response => void this.login(response.credential) });
-      window.google.accounts.id.renderButton(container, { theme: 'outline', size: 'large' });
+      window.google.accounts.id.renderButton(container, { theme: 'outline', size: 'large', locale: 'vi' });
     } catch (error) {
-      this.message.set(error instanceof Error && !(error instanceof HttpErrorResponse) ? error.message : 'Unable to prepare sign-in. Please try again.');
+      this.message.set(error instanceof Error && ['Chưa cấu hình đăng nhập Google.', 'Không thể sử dụng đăng nhập Google.', 'Không thể tải đăng nhập Google.'].includes(error.message) ? error.message : 'Không thể chuẩn bị đăng nhập. Vui lòng thử lại.');
     } finally { this.busy.set(false); }
   }
 
@@ -61,7 +72,7 @@ export class AdminImport {
       const script = document.createElement('script');
       script.src = 'https://accounts.google.com/gsi/client'; script.async = true;
       script.onload = () => resolve();
-      script.onerror = () => { script.remove(); reject(new Error('Unable to load Google sign-in.')); };
+      script.onerror = () => { script.remove(); reject(new Error('Không thể tải đăng nhập Google.')); };
       document.head.appendChild(script);
     });
   }
@@ -70,7 +81,7 @@ export class AdminImport {
     if (this.busy()) return;
     this.busy.set(true); this.message.set('');
     try { await this.api.login(credential); this.session.set(await this.api.session()); this.state.set('ready'); }
-    catch { this.state.set('denied'); this.message.set('Sign-in was not accepted. Check that your account is authorized and try again.'); }
+    catch { this.state.set('denied'); this.message.set('Đăng nhập không được chấp nhận. Hãy kiểm tra quyền truy cập và thử lại.'); }
     finally { this.busy.set(false); }
   }
 
@@ -89,7 +100,7 @@ export class AdminImport {
       if (current !== this.generation) return;
       this.rows = rows; this.preview.set(preview);
     } catch (error) {
-      if (current === this.generation) this.handleError(error, 'Unable to preview this workbook.');
+      if (current === this.generation) this.handleError(error, 'Không thể xem trước bảng tính.');
     } finally { if (current === this.generation) this.busy.set(false); }
   }
 
@@ -98,17 +109,17 @@ export class AdminImport {
     if (this.busy() || !session || !preview || !rows || preview.errors.length || this.applyLimitMessage(preview)) return;
     this.busy.set(true); this.message.set('');
     try { this.result.set(await this.api.apply(rows, preview, session.csrfToken)); this.preview.set(null); this.rows = null; }
-    catch (error) { this.preview.set(null); this.rows = null; this.handleError(error, 'Import failed. Select the file and preview again.'); }
+    catch (error) { this.preview.set(null); this.rows = null; this.handleError(error, 'Nhập dữ liệu thất bại. Hãy chọn tệp và xem trước lại.'); }
     finally { this.busy.set(false); }
   }
 
   applyLimitMessage(preview: ImportPreview): string {
     const exceeded = [
-      preview.counts.rows > 400 ? `rows (${preview.counts.rows}/400)` : '',
-      preview.counts.products > 100 ? `product groups (${preview.counts.products}/100)` : '',
-      preview.counts.images > 1000 ? `image entries (${preview.counts.images}/1,000)` : '',
+      preview.counts.rows > 400 ? `dòng (${preview.counts.rows}/400)` : '',
+      preview.counts.products > 100 ? `nhóm sản phẩm (${preview.counts.products}/100)` : '',
+      preview.counts.images > 1000 ? `ảnh (${preview.counts.images}/1.000)` : '',
     ].filter(Boolean);
-    return exceeded.length ? `Apply limit exceeded: ${exceeded.join(', ')}. Split or reduce the workbook and preview again.` : '';
+    return exceeded.length ? `Vượt quá giới hạn nhập: ${exceeded.join(', ')}. Hãy chia nhỏ hoặc giảm dữ liệu trong bảng tính và xem trước lại.` : '';
   }
 
   async logout() {
@@ -116,7 +127,7 @@ export class AdminImport {
     if (!session || this.busy()) return;
     this.busy.set(true); this.message.set('');
     try { await this.api.logout(session.csrfToken); this.clearSession(); }
-    catch (error) { this.handleError(error, 'Could not sign out. Please try again.'); }
+    catch (error) { this.handleError(error, 'Không thể đăng xuất. Vui lòng thử lại.'); }
     finally { this.busy.set(false); }
   }
 
@@ -124,19 +135,20 @@ export class AdminImport {
     const session = this.session();
     if (!session || this.busy()) return;
     this.busy.set(true); this.adminMessage.set(''); this.message.set('');
-    try { await this.api.addAdmin(email, session.csrfToken); input.value = ''; this.adminMessage.set('Administrator added. They can now sign in with Google.'); }
+    try { await this.api.addAdmin(email, session.csrfToken); input.value = ''; this.adminMessage.set('Đã thêm quản trị viên. Người này có thể đăng nhập bằng Google.'); }
     catch (error) {
-      if (error instanceof HttpErrorResponse && error.status === 409) this.adminMessage.set('This email is already registered.');
-      else if (error instanceof HttpErrorResponse && error.status === 400) this.adminMessage.set('Enter a valid lowercase Gmail address.');
-      else this.handleError(error, 'Unable to add administrator. Please try again.');
+      if (error instanceof HttpErrorResponse && error.status === 409) this.adminMessage.set('Email này đã được đăng ký.');
+      else if (error instanceof HttpErrorResponse && error.status === 400) this.adminMessage.set('Hãy nhập địa chỉ Gmail hợp lệ bằng chữ thường.');
+      else this.handleError(error, 'Không thể thêm quản trị viên. Vui lòng thử lại.');
     } finally { this.busy.set(false); }
   }
 
   private clearSession() { ++this.generation; this.rows = null; this.preview.set(null); this.result.set(null); this.adminMessage.set(''); this.session.set(null); this.state.set('signed-out'); }
+  expireSession() { this.clearSession(); this.message.set('Phiên đăng nhập đã hết hạn hoặc quyền truy cập bị từ chối. Vui lòng đăng nhập lại.'); }
   private handleError(error: unknown, fallback: string) {
-    if (error instanceof HttpErrorResponse && error.status === 401) { this.clearSession(); this.message.set('Your session has expired. Please sign in again.'); }
-    else if (error instanceof HttpErrorResponse && error.status === 403) { this.clearSession(); this.state.set('denied'); this.message.set('Request denied. Please sign in again.'); }
-    else if (error instanceof HttpErrorResponse && error.status === 409) this.message.set('The catalog changed or there is a conflict. Preview again or resolve the conflict manually.');
-    else this.message.set(error instanceof Error && !(error instanceof HttpErrorResponse) ? error.message : fallback);
+    if (error instanceof HttpErrorResponse && error.status === 401) { this.clearSession(); this.message.set('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'); }
+    else if (error instanceof HttpErrorResponse && error.status === 403) { this.clearSession(); this.state.set('denied'); this.message.set('Yêu cầu bị từ chối. Vui lòng đăng nhập lại.'); }
+    else if (error instanceof HttpErrorResponse && error.status === 409) this.message.set('Danh mục đã thay đổi hoặc có xung đột. Hãy xem trước lại hoặc xử lý xung đột thủ công.');
+    else this.message.set(error instanceof Error && !(error instanceof HttpErrorResponse) ? translateImportReason(error.message, fallback) : fallback);
   }
 }

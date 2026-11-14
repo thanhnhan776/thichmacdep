@@ -10,9 +10,9 @@
         </form>
       </div>
       <nav class="categories" [attr.aria-label]="language.text().productCategories">
-        <a routerLink="/products" [queryParams]="{keyword: data.query.keyword}" [attr.aria-current]="!data.category ? 'page' : null">{{ language.text().all }}</a>
+        <a routerLink="/products" queryParamsHandling="merge" [queryParams]="{category: null, page: null}" [attr.aria-current]="!data.category ? 'page' : null">{{ language.text().all }}</a>
         @for (category of data.categories; track category.id) {
-          <a routerLink="/products" [queryParams]="{category: category.slug, keyword: data.query.keyword}" [attr.aria-current]="data.category?.id === category.id ? 'page' : null">{{ category.name }}</a>
+          <a routerLink="/products" queryParamsHandling="merge" [queryParams]="{category: category.slug, page: null}" [attr.aria-current]="data.category?.id === category.id ? 'page' : null">{{ category.name }}</a>
         }
       </nav>
       <div class="catalog-controls">
@@ -22,7 +22,8 @@
           </select>
         </label>
         <label>{{ language.current() === 'vi' ? 'Sắp xếp' : 'Sort by' }}
-          <select [value]="data.query.sort || 'newest'" (change)="updateControls(data.query.pageSize!, $any($event.target).value)">
+          <select [value]="data.query.sort || 'trending'" (change)="updateControls(data.query.pageSize!, $any($event.target).value)">
+            <option value="trending">{{ language.current() === 'vi' ? 'Nổi bật' : 'Trending' }}</option>
             <option value="newest">{{ language.current() === 'vi' ? 'Mới nhất' : 'Newest' }}</option><option value="price-asc">{{ language.current() === 'vi' ? 'Giá tăng dần' : 'Price: low to high' }}</option><option value="price-desc">{{ language.current() === 'vi' ? 'Giá giảm dần' : 'Price: high to low' }}</option><option value="name-asc">{{ language.current() === 'vi' ? 'Tên A–Z' : 'Name A–Z' }}</option><option value="name-desc">{{ language.current() === 'vi' ? 'Tên Z–A' : 'Name Z–A' }}</option>
           </select>
         </label>
@@ -35,9 +36,9 @@
       }
       @if (data.products.page > 1 || data.products.page * data.products.pageSize < data.products.total) {
         <nav class="pagination" [attr.aria-label]="language.text().productPages">
-          @if (data.products.page > 1) { <a routerLink="/products" [queryParams]="{keyword: data.query.keyword, category: data.query.category, pageSize: data.query.pageSize, sort: data.query.sort, page: data.products.page - 1}" [attr.aria-label]="language.text().previousPage">{{ language.text().previous }}</a> }
+          @if (data.products.page > 1) { <a routerLink="/products" queryParamsHandling="merge" [queryParams]="{keyword: data.query.keyword, category: data.query.category, pageSize: data.query.pageSize, sort: data.query.sort, page: data.products.page - 1}" [attr.aria-label]="language.text().previousPage">{{ language.text().previous }}</a> }
           <span aria-current="page">{{ language.text().page }} {{ data.products.page }}</span>
-          @if (data.products.page * data.products.pageSize < data.products.total) { <a routerLink="/products" [queryParams]="{keyword: data.query.keyword, category: data.query.category, pageSize: data.query.pageSize, sort: data.query.sort, page: data.products.page + 1}" [attr.aria-label]="language.text().nextPage">{{ language.text().next }}</a> }
+          @if (data.products.page * data.products.pageSize < data.products.total) { <a routerLink="/products" queryParamsHandling="merge" [queryParams]="{keyword: data.query.keyword, category: data.query.category, pageSize: data.query.pageSize, sort: data.query.sort, page: data.products.page + 1}" [attr.aria-label]="language.text().nextPage">{{ language.text().next }}</a> }
         </nav>
       }
     } @else if (data.status === 'invalid') {

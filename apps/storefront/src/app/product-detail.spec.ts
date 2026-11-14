@@ -10,7 +10,7 @@ const product: ProductData = {
   id: 'p', sku: 'P-1', slug: 'synthetic', name: 'Synthetic garment', shortDescription: null, description: 'Actual description', brandName: null,
   priceMinor: 120000, currency: 'VND', website: { seoTitle: null, seoDescription: null, marketingDescription: null, isFeatured: false, displayOrder: 0 },
   images: [{ id: 'i', url: '/media/example.jpg', altText: null, position: 0 }],
-  variants: [{ id: 'v', sku: 'V-1', name: 'Synthetic variant', attributesJson: null, priceMinor: 150000 }],
+  variants: [{ id: 'v', sku: 'V-1', name: 'Synthetic variant', description: null, attributesJson: null, priceMinor: 150000 }],
   categories: [{ id: 'c', slug: 'synthetic-category', name: 'Synthetic category', parentId: null }],
 };
 const settings: StoreSettings = { storeName: 'Synthetic store', defaultCurrency: 'VND', tiktokUrl: null, instagramUrl: 'javascript:alert(1)', zaloUrl: 'https://example.test/contact', messengerUrl: null, otherContactUrl: null, logoUrl: null };
@@ -50,6 +50,27 @@ describe('product detail resolver', () => {
 });
 
 describe('product detail page', () => {
+  it('switches galleries in assignment order and resets the selected thumbnail', () => {
+    const first = { id: 'first', url: '/first.jpg', altText: null, position: 0 };
+    const second = { id: 'second', url: '/second.jpg', altText: null, position: 1 };
+    const variants = [
+      { ...product.variants[0], id: 'assigned', images: [second, first] },
+      { ...product.variants[0], id: 'legacy' },
+    ];
+    const data = new BehaviorSubject({ productDetail: { status: 'success', product: { ...product, images: [first, second], variants }, settings } as ProductDetailPageData });
+    TestBed.configureTestingModule({ imports: [ProductDetail], providers: [provideRouter([]), { provide: ActivatedRoute, useValue: { data, snapshot: { data: data.value } } }] });
+    const fixture = TestBed.createComponent(ProductDetail);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    component.selectedImage.set('first');
+    component.selectedVariant.set('assigned');
+    fixture.detectChanges();
+    expect(component.images().map(image => image.id)).toEqual(['second', 'first']);
+    expect(component.image()?.id).toBe('second');
+    component.selectedVariant.set('legacy');
+    fixture.detectChanges();
+    expect(component.image()?.id).toBe('first');
+  });
   it('orders numeric equivalents with garment sizes and leaves unknown sizes last', () => {
     expect(sortGarmentSizes(['3XL', 'XXL', 'XL', '2XL', 'L', 'custom', 'M'])).toEqual(['M', 'L', 'XL', '2XL', 'XXL', '3XL', 'custom']);
   });
@@ -101,7 +122,7 @@ describe('product detail page', () => {
   });
   it('sorts only size dimensions and retains other option order', () => {
     const variants = ['L', 'xs', 'unknown', 'M', 'S'].map((size, index) => ({
-      id: String(index), sku: null, name: size, attributesJson: JSON.stringify({ SIZE: size, color: ['Red', 'Blue', 'Green', 'Black', 'White'][index] }), priceMinor: null,
+      id: String(index), sku: null, name: size, description: null, attributesJson: JSON.stringify({ SIZE: size, color: ['Red', 'Blue', 'Green', 'Black', 'White'][index] }), priceMinor: null,
     }));
     expect(variantDimensions(variants)).toEqual([
       { label: 'SIZE', values: ['xs', 'S', 'M', 'L', 'unknown'] },
@@ -111,7 +132,7 @@ describe('product detail page', () => {
   });
   it('renders ordered sizes and unchanged color order in the detail page', () => {
     const variants = ['L', 'xs', 'M', 'S', 'custom'].map((size, index) => ({
-      id: String(index), sku: null, name: size, attributesJson: JSON.stringify({ size, color: ['Red', 'Blue', 'Green', 'Black', 'White'][index] }), priceMinor: null,
+      id: String(index), sku: null, name: size, description: null, attributesJson: JSON.stringify({ size, color: ['Red', 'Blue', 'Green', 'Black', 'White'][index] }), priceMinor: null,
     }));
     const detail: ProductDetailPageData = { status: 'success', product: { ...product, variants }, settings };
     const data = new BehaviorSubject({ productDetail: detail });
@@ -124,10 +145,10 @@ describe('product detail page', () => {
   });
   it('renders persisted C54-style attributes as deduplicated dimension choices', () => {
     expect(variantDimensions([
-      { id: 's', sku: 'C54-S', name: 'C54', attributesJson: '{"size":"S","color":"Red"}', priceMinor: null },
-      { id: 'm', sku: 'C54-M', name: 'C54', attributesJson: '{"size":"M","color":"Blue"}', priceMinor: null },
-      { id: 'l', sku: 'C54-L', name: 'C54', attributesJson: '{"size":"L","color":"Yellow"}', priceMinor: null },
-      { id: 'duplicate', sku: 'C54-X', name: 'C54', attributesJson: '{"size":"S","color":"red"}', priceMinor: null },
+      { id: 's', sku: 'C54-S', name: 'C54', description: null, attributesJson: '{"size":"S","color":"Red"}', priceMinor: null },
+      { id: 'm', sku: 'C54-M', name: 'C54', description: null, attributesJson: '{"size":"M","color":"Blue"}', priceMinor: null },
+      { id: 'l', sku: 'C54-L', name: 'C54', description: null, attributesJson: '{"size":"L","color":"Yellow"}', priceMinor: null },
+      { id: 'duplicate', sku: 'C54-X', name: 'C54', description: null, attributesJson: '{"size":"S","color":"red"}', priceMinor: null },
     ])).toEqual([{ label: 'Size', values: ['S', 'M', 'L'] }, { label: 'Color', values: ['Red', 'Blue', 'Yellow'] }]);
   });
   it('renders actual product, safe contacts, variant price and image fallback', () => {

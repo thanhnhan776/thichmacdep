@@ -38,12 +38,12 @@ export const resolveCatalogPage: ResolveFn<CatalogPageData> = async route => {
   const pageText = params.get('page');
   const sizeText = params.get('pageSize');
   const pageSize = sizeText === null ? 12 : Number(sizeText);
-  const sort = params.get('sort') ?? 'newest';
+  const sort = params.get('sort') ?? 'trending';
   if ((pathCategory && queryCategory && pathCategory !== queryCategory)
       || [keyword, category].some(value => value !== undefined && (!value.trim() || value.length > 200))
       || (pageText !== null && !/^[1-9]\d*$/.test(pageText))
       || (sizeText !== null && !['12', '24', '48'].includes(sizeText))
-      || !['newest', 'price-asc', 'price-desc', 'name-asc', 'name-desc'].includes(sort)) return fail('invalid', 400);
+      || !['trending', 'newest', 'price-asc', 'price-desc', 'name-asc', 'name-desc'].includes(sort)) return fail('invalid', 400);
   const page = pageText === null ? 1 : Number(pageText);
   if (!Number.isSafeInteger(page) || !Number.isSafeInteger((page - 1) * pageSize)) return fail('invalid', 400);
   const query: ProductQuery = { page, pageSize, keyword, category, sort: sort as ProductQuery['sort'] };
@@ -74,7 +74,7 @@ export class CatalogPage {
 
   search(value: string, category?: string): void {
     const keyword = value.trim();
-    void this.router.navigate(['/products'], { queryParams: { keyword: keyword || null, category: category || null } });
+    void this.router.navigate(['/products'], { queryParams: { ...this.route.snapshot.queryParams, keyword: keyword || null, category: category || null, page: null } });
   }
   updateControls(pageSize: string | number, sort: string): void {
     void this.router.navigate(['/products'], { queryParams: { ...this.route.snapshot.queryParams, pageSize, sort, page: null } });

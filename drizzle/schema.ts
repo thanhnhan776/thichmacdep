@@ -56,6 +56,8 @@ export const products = sqliteTable('products', {
   priceMinor: integer('price_minor'),
   currency: text('currency').notNull().default('VND'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  isTrending: integer('is_trending', { mode: 'boolean' }).notNull().default(false),
+  trendingSortOrder: integer('trending_sort_order').notNull().default(0),
   sourceUpdatedAt: text('source_updated_at'),
   lastSyncedAt: text('last_synced_at'),
   createdAt: text('created_at').notNull(),
@@ -131,12 +133,23 @@ export const productVariants = sqliteTable('product_variants', {
   externalVariantId: text('external_variant_id'),
   sku: text('sku'),
   name: text('name').notNull(),
+  description: text('description'),
   attributesJson: text('attributes_json'),
   priceMinor: integer('price_minor'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
 }, (table) => [
   index('product_variants_product_idx').on(table.productId),
   check('product_variants_price_minor_nonnegative', sql`${table.priceMinor} IS NULL OR (typeof(${table.priceMinor}) = 'integer' AND ${table.priceMinor} >= 0)`),
+]);
+
+export const productVariantImages = sqliteTable('product_variant_images', {
+  variantId: text('variant_id').notNull().references(() => productVariants.id, { onDelete: 'cascade' }),
+  imageId: text('image_id').notNull().references(() => productImages.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.variantId, table.imageId] }),
+  index('product_variant_images_order_idx').on(table.variantId, table.position),
+  check('product_variant_images_position_nonnegative', sql`typeof(${table.position}) = 'integer' AND ${table.position} >= 0`),
 ]);
 
 export const externalProductMappings = sqliteTable('external_product_mappings', {

@@ -47,6 +47,10 @@ Rows absent from an upload are not evidence of deletion or deactivation. Leave e
 
 The internal preview returns a content digest and a catalog snapshot; both must be supplied to apply. The snapshot is checked after the XLSX sync lock is acquired. XLSX writers must use that lock. The grouping model and original category are recorded per product; legacy mappings without provenance are rejected for manual resolution. Because `product_category` cannot represent shared ownership, category changes are rejected rather than deleting another source's link or accumulating stale XLSX links.
 
+Interrupted catalog writes can leave the lock running indefinitely. Follow the
+[offline catalog lock recovery procedure](catalog-lock-recovery.md); never
+clear a lock based only on its age.
+
 There is no automatic stale-lock clearing. If an XLSX run remains `running` after a crash, an operator must first verify that no worker for that run is still live or can resume, then manually mark that specific run failed. Never clear a lock based on age alone.
 
 SKU collision checks use the same Unicode normalization and case folding as XLSX validation across catalog products and variants. D1 does not provide a transaction spanning the reads and the later write batch: the XLSX lock serializes cooperating XLSX imports only. External writers that change SKUs concurrently can race the snapshot and collision checks; preventing that requires all catalog writers to share a lock or database-enforced normalized SKU constraints. Do not use concurrent production catalog writers until this is resolved.

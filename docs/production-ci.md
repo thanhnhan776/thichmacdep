@@ -7,9 +7,9 @@ The workflow definition in the pushed commit determines what runs on a push. Thi
 ## GitHub and Cloudflare setup
 
 1. In repository Actions secrets, set `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Use a dedicated Cloudflare token restricted to the production account and the permissions needed to deploy both Workers and apply D1 migrations. Never expose the token to untrusted workflows or pull request code; review workflow and dependency changes before merging.
-2. In repository Actions variables, set `GOOGLE_CLIENT_ID` to the production Google OAuth **web client ID** (not a client secret). It is public configuration, not a credential. Authorize `https://thichmacdep.nhanttdev.workers.dev` as a JavaScript origin in Google Cloud. CI validates and passes the ID through an environment variable rather than interpolating it into shell code.
+2. In repository Actions variables, set `GOOGLE_CLIENT_ID` to the production Google OAuth **web client ID** (not a client secret). It is public configuration, not a credential. Verify the public site origin, ensure it matches the API's `ADMIN_ORIGIN`, and authorize that origin in Google Cloud. CI validates and passes the ID through an environment variable rather than interpolating it into shell code.
 3. Verify the account's workers.dev subdomain, the production D1 database ID and migration state in `wrangler.production.jsonc`, and both Worker configurations, service binding, routes, access settings and rate limits. Disabling workers.dev and preview URLs on the API does not remove existing routes. Back up production data and verify the backup and restore process before migrations.
-4. Confirm production readiness separately: deployed same-origin routing, HTTPS, OAuth sign-in, edge protections, and the operational caveats in `README.md` are not established by this workflow. The existing README describes production as unverified; a successful workflow does not by itself resolve those concerns.
+4. Confirm production readiness separately: deployed same-origin routing, HTTPS, OAuth sign-in, the `IMAGES` R2 binding and HTTPS `IMAGE_PUBLIC_BASE_URL`, edge protections, and the operational caveats in `README.md` are not established by this workflow. The existing README describes production as unverified; a successful workflow does not by itself resolve those concerns.
 
 ## Execution and recovery
 

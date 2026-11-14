@@ -120,6 +120,7 @@ test('local SSR catalog hydrates and works in offline Chrome', { timeout: 180000
     const d1 = (...args) => run([wrangler, 'd1', ...args, '--local', '-c', 'wrangler.jsonc', '--persist-to', state]);
     await d1('migrations', 'apply', 'DB');
     await d1('execute', 'DB', '--file', 'scripts/seed-local.sql');
+    await d1('execute', 'DB', '--command', "UPDATE products SET description = 'Product description' WHERE id = 'prod-linen-shirt'; UPDATE product_variants SET description = 'Variant <strong>description</strong>' WHERE id = 'variant-linen-shirt-m';");
     await d1('execute', 'DB', '--command', "INSERT INTO product_images (id, product_id, source_url, alt_text, position, created_at, updated_at) VALUES ('browser-image', 'prod-linen-shirt', 'https://cdn2-retail-images.kiotviet.vn/synthetic-browser.jpg', 'Synthetic image', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')");
     await run([join(root, 'apps/storefront/node_modules/@angular/cli/bin/ng.js'), 'build', '--project', 'storefront'], join(root, 'apps/storefront'));
     const base = `http://127.0.0.1:${await port()}`;
@@ -186,8 +187,14 @@ test('local SSR catalog hydrates and works in offline Chrome', { timeout: 180000
     await wait("document.querySelector('app-product-detail .placeholder')?.textContent.includes('Không có hình ảnh')", 'offline detail image fallback');
     await viewport(375);
     await viewport(1440);
+    assert.deepEqual(await cdp.evaluate("[...document.querySelectorAll('app-product-detail .description')].map(p => p.textContent)"), ['Product description']);
     await cdp.evaluate("[...document.querySelectorAll('.variants button')].find(b => b.textContent.trim() === 'size: M').click()");
     await wait("[...document.querySelectorAll('.variants button')].find(b => b.textContent.trim() === 'size: M')?.getAttribute('aria-pressed') === 'true'", 'hydrated detail variant');
+    assert.deepEqual(await cdp.evaluate("[...document.querySelectorAll('app-product-detail .description')].map(p => p.textContent)"), ['Product description', 'Variant <strong>description</strong>']);
+    assert.equal(await cdp.evaluate("document.querySelector('app-product-detail .description strong')"), null);
+    await cdp.evaluate("[...document.querySelectorAll('.variants button')].find(b => b.textContent.trim() === 'size: L').click()");
+    await wait("[...document.querySelectorAll('.variants button')].find(b => b.textContent.trim() === 'size: L')?.getAttribute('aria-pressed') === 'true'", 'variant without description');
+    assert.deepEqual(await cdp.evaluate("[...document.querySelectorAll('app-product-detail .description')].map(p => p.textContent)"), ['Product description']);
     assert.ok(blocked.some(url => url.includes('synthetic-browser.jpg')), 'synthetic external image was blocked');
     assert.deepEqual(errors.filter(error => /hydrat|NG05\d\d/i.test(error)), [], `hydration errors: ${errors.join('\n')}`);
   } finally {
