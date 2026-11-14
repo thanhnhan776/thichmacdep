@@ -11,7 +11,11 @@ const product: ProductListItem = {
 };
 
 describe('ProductCard', () => {
-  beforeEach(() => TestBed.configureTestingModule({ imports: [ProductCard], providers: [provideRouter([])] }));
+  beforeEach(() => {
+    localStorage.setItem('storefront-language', 'vi');
+    TestBed.configureTestingModule({ imports: [ProductCard], providers: [provideRouter([])] });
+  });
+  afterEach(() => localStorage.removeItem('storefront-language'));
 
   it('renders real product details and a product link', () => {
     const fixture = TestBed.createComponent(ProductCard);
