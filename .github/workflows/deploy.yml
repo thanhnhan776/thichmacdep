@@ -70,5 +70,5 @@ jobs:
 
       - name: Check public API health
         run: |
-          curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors --output "$RUNNER_TEMP/health.json" https://thichmacdep.com.vn/api/health
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors --output "$RUNNER_TEMP/health.json" https://thichmacdep.nhanttdev.workers.dev/api/health
           node -e 'const health = require(process.argv[1]); if (health.status !== "ok") process.exit(1)' "$RUNNER_TEMP/health.json"
